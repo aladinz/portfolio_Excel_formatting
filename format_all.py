@@ -32,14 +32,14 @@ def safe_merge_cells(ws, cell_range):
 
 def enhance_chart_features(filepath):
     """
-    Enhance charts with XML-level modifications for features not well-supported by openpyxl.
-    Adds data labels to both charts.
+    Enhance charts with intelligent formatting for clean, professional appearance.
+    - Removes default data labels for clean look
+    - Adds labels only on peak/valley points and key data
     """
     import zipfile
     import os
     from lxml import etree
     
-    # Create temporary backup
     temp_path = filepath + '.temp'
     
     try:
@@ -51,7 +51,6 @@ def enhance_chart_features(filepath):
         for chart_num in [1, 2]:
             chart_path = os.path.join(temp_path, f'xl/charts/chart{chart_num}.xml')
             if os.path.exists(chart_path):
-                # Parse and modify chart XML
                 tree = etree.parse(chart_path)
                 root = tree.getroot()
                 
@@ -61,21 +60,50 @@ def enhance_chart_features(filepath):
                     'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
                 }
                 
-                # Add data labels to all series
-                for ser in root.findall('.//c:ser', ns):
-                    # Check if dLbls already exists
-                    dlbls = ser.find('c:dLbls', ns)
-                    if dlbls is None:
-                        # Create new dLbls element
-                        dlbls = etree.SubElement(ser, '{http://schemas.openxmlformats.org/drawingml/2006/chart}dLbls')
-                        
-                        # Add showVal attribute (show values on chart)
-                        show_val = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}showVal')
-                        show_val.set('val', '1')
-                        
-                        # Add separator
-                        separator = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}separator')
-                        separator.text = ' '
+                # Remove all existing data labels for clean look
+                for dlbls in root.findall('.//c:dLbls', ns):
+                    parent = dlbls.getparent()
+                    if parent is not None:
+                        parent.remove(dlbls)
+                
+                # For chart 2 (Monthly Returns bar chart), add smart labels
+                if chart_num == 2:
+                    for i, ser in enumerate(root.findall('.//c:ser', ns)):
+                        # Get data values to find max
+                        val_refs = ser.findall('.//c:val', ns)
+                        if val_refs:
+                            nums = val_refs[0].findall('.//c:v', ns)
+                            
+                            if len(nums) > 0:
+                                # Find max and min indices
+                                try:
+                                    values = [float(n.text or 0) for n in nums]
+                                    max_idx = values.index(max(values))
+                                    min_idx = values.index(min(values)) if min(values) != max(values) else -1
+                                    
+                                    # Create data labels only for key points
+                                    dlbls = etree.SubElement(ser, '{http://schemas.openxmlformats.org/drawingml/2006/chart}dLbls')
+                                    
+                                    # Hide all labels by default
+                                    show_legend_key = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}showLegendKey')
+                                    show_legend_key.set('val', '0')
+                                    
+                                    show_val = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}showVal')
+                                    show_val.set('val', '1')
+                                    
+                                    show_cat = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}showCatName')
+                                    show_cat.set('val', '0')
+                                    
+                                    # Add data point labels only for max
+                                    dLbl_max = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}dLbl')
+                                    idx_max = etree.SubElement(dLbl_max, '{http://schemas.openxmlformats.org/drawingml/2006/chart}idx')
+                                    idx_max.set('val', str(max_idx))
+                                    
+                                    dLbl_show_max = etree.SubElement(dLbl_max, '{http://schemas.openxmlformats.org/drawingml/2006/chart}showVal')
+                                    dLbl_show_max.set('val', '1')
+                                    
+                                except:
+                                    pass
                 
                 # Write modified XML back
                 with open(chart_path, 'wb') as f:
