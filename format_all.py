@@ -7,7 +7,6 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.chart import LineChart, BarChart, Reference
 from openpyxl.chart.label import DataLabelList
-from openpyxl.chart.trendline import Trendline
 
 # Import restructuring function from restructure_type_b.py
 try:
@@ -607,13 +606,13 @@ def add_charts_to_executive_summary(wb):
             portfolio_chart.add_data(data, titles_from_data=True)
             portfolio_chart.set_categories(categories)
             
-            # Enhanced line styling
+            # Enhanced line styling with professional dark blue
             portfolio_chart.series[0].graphicalProperties.line.solidFill = "1F4788"
-            portfolio_chart.series[0].graphicalProperties.line.width = 30000  # Thicker line
+            portfolio_chart.series[0].graphicalProperties.line.width = 30000  # Thicker line for visibility
             
             ws_exec.add_chart(portfolio_chart, "F1")
             
-            # Monthly Returns Bar Chart with Color-Coding
+            # Monthly Returns Bar Chart with Professional Styling
             returns_chart = BarChart()
             returns_chart.type = "col"
             returns_chart.title = "Monthly Returns - 12 Month Performance"
@@ -624,21 +623,14 @@ def add_charts_to_executive_summary(wb):
             returns_chart.width = 16
             returns_chart.legend.position = 'b'
             
+            # Use original profit data for single series visualization
             categories = Reference(ws_exec, min_col=10, min_row=4, max_row=3+len(monthly_profits))
-            
-            # Add positive returns (Gains) - Green
-            gains_data = Reference(ws_exec, min_col=12, min_row=3, max_row=3+len(monthly_profits))
-            returns_chart.add_data(gains_data, titles_from_data=True)
-            
-            # Add negative returns (Losses) - Red
-            losses_data = Reference(ws_exec, min_col=13, min_row=3, max_row=3+len(monthly_profits))
-            returns_chart.add_data(losses_data, titles_from_data=True)
-            
+            profit_data = Reference(ws_exec, min_col=11, min_row=3, max_row=3+len(monthly_profits))
+            returns_chart.add_data(profit_data, titles_from_data=True)
             returns_chart.set_categories(categories)
             
-            # Color-code: Green for gains, Red for losses
-            returns_chart.series[0].graphicalProperties.solidFill = "70AD47"  # Green
-            returns_chart.series[1].graphicalProperties.solidFill = "C5504F"  # Red
+            # Professional medium blue color for bars
+            returns_chart.series[0].graphicalProperties.solidFill = "4472C4"
             
             # Add data labels through XML manipulation after adding chart
             ws_exec.add_chart(returns_chart, "F20")
