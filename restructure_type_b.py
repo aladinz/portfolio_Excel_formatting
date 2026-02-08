@@ -1,4 +1,13 @@
+# -*- coding: utf-8 -*-
 import sys
+import os
+import io
+
+# Fix Unicode output for Windows console
+if sys.platform == 'win32':
+    # Reconfigure stdout to use UTF-8 encoding
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -27,7 +36,7 @@ def restructure_type_b_to_type_a(filepath):
             break
     
     if not month_row:
-        print("  ✗ Could not find month headers")
+        print("  [ERROR] Could not find month headers")
         return False
     
     # Extract months and data
@@ -76,12 +85,12 @@ def restructure_type_b_to_type_a(filepath):
     
     # Save the restructured file
     wb_new.save(filepath)
-    print(f"  ✓ Restructured to Type A format")
-    print(f"  ✓ Created Executive Summary sheet")
-    print(f"  ✓ Created Monthly Performance sheet")
-    print(f"  ✓ Created Data Source sheet")
-    print(f"  ✓ Applied professional formatting")
-    print(f"✓ File saved successfully!\n")
+    print(f"  [OK] Restructured to Type A format")
+    print(f"  [OK] Created Executive Summary sheet")
+    print(f"  [OK] Created Monthly Performance sheet")
+    print(f"  [OK] Created Data Source sheet")
+    print(f"  [OK] Applied professional formatting")
+    print(f"[OK] File saved successfully!\n")
     
     return True
 
@@ -417,7 +426,7 @@ if __name__ == '__main__':
             if restructure_type_b_to_type_a(filename):
                 success_count += 1
         except Exception as e:
-            print(f"✗ Error processing {filename}: {e}\n")
+            print(f"[ERROR] Error processing {filename}: {e}\n")
             error_count += 1
     
     print("=" * 70)

@@ -1,5 +1,13 @@
+# -*- coding: utf-8 -*-
 import sys
 import os
+import io
+
+# Fix Unicode output for Windows console
+if sys.platform == 'win32':
+    # Reconfigure stdout to use UTF-8 encoding
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -75,23 +83,23 @@ def format_portfolio_universal(filepath):
     is_type_b = 'Data' in sheets and len(sheets) == 1
     
     if is_type_a:
-        print("  → Detected: Type A (Executive Summary + Monthly Performance)")
+        print("  -> Detected: Type A (Executive Summary + Monthly Performance)")
         format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlight_fill,
                               header_font, title_font, subheader_font, bold_font, regular_font,
                               thin_border, thick_border, section_fills)
     
     elif is_type_b:
-        print("  → Detected: Type B (Data sheet structure)")
+        print("  -> Detected: Type B (Data sheet structure)")
         format_type_b(wb, header_fill, subheader_fill, metric_fill, data_fill,
                      section_fills, header_font, title_font, subheader_font, bold_font,
                      regular_font, thin_border)
     
     else:
-        print("  ⚠ Warning: Unknown file structure. Attempting basic formatting...")
+        print("  ! Warning: Unknown file structure. Attempting basic formatting...")
     
     # Save the workbook
     wb.save(filepath)
-    print(f"✓ File saved successfully!\n")
+    print(f"[OK] File saved successfully!\n")
 
 
 def format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlight_fill,
@@ -229,7 +237,7 @@ def format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlig
     ws_exec.column_dimensions['D'].width = 15
     ws_exec.column_dimensions['E'].width = 15
     
-    print("  ✓ Executive Summary formatted (with extended sections)")
+    print("  [OK] Executive Summary formatted (with extended sections)")
     
     # ========== FORMAT MONTHLY PERFORMANCE ==========
     ws_monthly = wb['Monthly Performance']
@@ -364,11 +372,11 @@ def format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlig
     for col in range(2, 14):
         ws_monthly.column_dimensions[get_column_letter(col)].width = 14
     
-    print("  ✓ Monthly Performance formatted")
+    print("  [OK] Monthly Performance formatted")
     
     # ========== ADD CHARTS ==========
     add_charts_to_executive_summary(wb)
-    print("  ✓ Charts added")
+    print("  [OK] Charts added")
 
 
 
@@ -481,7 +489,7 @@ def format_type_b(wb, header_fill, subheader_fill, metric_fill, data_fill,
                  regular_font, thin_border):
     """Format Type B files (Data sheet only)"""
     # Placeholder - Type B files are typically restructured to Type A
-    print("  ✓ Data sheet formatting applied")
+    print("  [OK] Data sheet formatting applied")
 
 
 if __name__ == '__main__':
@@ -492,17 +500,17 @@ if __name__ == '__main__':
         print("="*70)
         print("\nUsage: python format_all.py <filename.xlsx> [file2.xlsx ...]")
         print("\nFeatures:")
-        print("  ✓ Professional color-coded formatting")
-        print("  ✓ Portfolio Growth Line Charts")
-        print("  ✓ Monthly Returns Bar Charts")
-        print("  ✓ Executive Summary with KPIs")
-        print("  ✓ Trading Activity Summary")
-        print("  ✓ Key Insights & Recommendations")
-        print("  ✓ Action Items & Strategy")
+        print("  [OK] Professional color-coded formatting")
+        print("  [OK] Portfolio Growth Line Charts")
+        print("  [OK] Monthly Returns Bar Charts")
+        print("  [OK] Executive Summary with KPIs")
+        print("  [OK] Trading Activity Summary")
+        print("  [OK] Key Insights & Recommendations")
+        print("  [OK] Action Items & Strategy")
         print("\nSupports:")
-        print("  • Type A: Executive Summary + Monthly Performance + Data")
-        print("  • Type A Extended: + Trading Activity + Key Insights + Action Items")
-        print("  • Type B: Single Data sheet")
+        print("  * Type A: Executive Summary + Monthly Performance + Data")
+        print("  * Type A Extended: + Trading Activity + Key Insights + Action Items")
+        print("  * Type B: Single Data sheet")
         print("\nExample:")
         print("  python format_all.py Portfolio1.xlsx")
         print("  python format_all.py *.xlsx")
@@ -526,7 +534,7 @@ if __name__ == '__main__':
         try:
             format_portfolio_universal(filename)
         except Exception as e:
-            print(f"✗ Error: {e}\n")
+            print(f"[ERROR] {e}\n")
     
     print("="*70)
     print("FORMATTING COMPLETE")
