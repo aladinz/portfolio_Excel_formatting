@@ -253,14 +253,14 @@ def format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlig
                 ws_exec[f'A{row}'].font = regular_font
                 ws_exec[f'A{row}'].fill = section_fills['insights']
                 ws_exec[f'A{row}'].border = thin_border
-                ws_exec[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                ws_exec[f'A{row}'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
                 
                 for col in ['B', 'C', 'D', 'E']:
                     cell = ws_exec[f'{col}{row}']
                     cell.fill = section_fills['insights']
                     cell.border = thin_border
                 
-                ws_exec.row_dimensions[row].height = 20
+                ws_exec.row_dimensions[row].height = 32
     
     ws_exec.row_dimensions[29].height = 8
     
@@ -277,14 +277,14 @@ def format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlig
                 ws_exec[f'A{row}'].font = regular_font
                 ws_exec[f'A{row}'].fill = section_fills['actions']
                 ws_exec[f'A{row}'].border = thin_border
-                ws_exec[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                ws_exec[f'A{row}'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
                 
                 for col in ['B', 'C', 'D', 'E']:
                     cell = ws_exec[f'{col}{row}']
                     cell.fill = section_fills['actions']
                     cell.border = thin_border
                 
-                ws_exec.row_dimensions[row].height = 20
+                ws_exec.row_dimensions[row].height = 32
     
     # Set column widths
     ws_exec.column_dimensions['A'].width = 28

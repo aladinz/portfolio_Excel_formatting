@@ -228,7 +228,7 @@ def create_executive_summary(ws, title, kpis):
     
     for idx, insight in enumerate(insights, start=23):
         ws[f'A{idx}'].value = insight
-        ws.row_dimensions[idx].height = 16
+        ws.row_dimensions[idx].height = 32
     
     # Add empty row
     ws.row_dimensions[29].height = 8
@@ -249,7 +249,7 @@ def create_executive_summary(ws, title, kpis):
     
     for idx, action in enumerate(actions, start=31):
         ws[f'A{idx}'].value = action
-        ws.row_dimensions[idx].height = 16
+        ws.row_dimensions[idx].height = 32
     
     ws.column_dimensions['A'].width = 28
     ws.column_dimensions['B'].width = 18
