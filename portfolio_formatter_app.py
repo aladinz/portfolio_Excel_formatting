@@ -109,9 +109,15 @@ if uploaded_file is not None:
         progress_placeholder.info("⏳ Formatting your file... This may take a moment.")
         
         # Run the format_all.py script
+        python_exe = script_dir / ".venv" / "Scripts" / "python.exe"
+        
+        # If .venv not found in script_dir, try parent directory
+        if not python_exe.exists():
+            python_exe = script_dir.parent / ".venv" / "Scripts" / "python.exe"
+        
         result = subprocess.run(
             [
-                str(Path(script_dir.parent) / ".venv" / "Scripts" / "python.exe"),
+                str(python_exe),
                 str(format_script),
                 tmp_path
             ],
