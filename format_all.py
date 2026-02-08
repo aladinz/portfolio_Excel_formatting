@@ -6,6 +6,8 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.chart import LineChart, BarChart, Reference
+from openpyxl.chart.label import DataLabelList
+from openpyxl.chart.trendline import Trendline
 
 # Import restructuring function from restructure_type_b.py
 try:
@@ -28,6 +30,81 @@ def safe_merge_cells(ws, cell_range):
     except Exception as e:
         # If merge fails, silently continue - data is more important than formatting
         pass
+
+def enhance_chart_features(filepath):
+    """
+    Enhance charts with XML-level modifications for features not well-supported by openpyxl.
+    Adds data labels to both charts.
+    """
+    import zipfile
+    import os
+    from lxml import etree
+    
+    # Create temporary backup
+    temp_path = filepath + '.temp'
+    
+    try:
+        # Extract the Excel file
+        with zipfile.ZipFile(filepath, 'r') as zip_ref:
+            zip_ref.extractall(temp_path)
+        
+        # Modify chart XML files
+        for chart_num in [1, 2]:
+            chart_path = os.path.join(temp_path, f'xl/charts/chart{chart_num}.xml')
+            if os.path.exists(chart_path):
+                # Parse and modify chart XML
+                tree = etree.parse(chart_path)
+                root = tree.getroot()
+                
+                # Define namespaces
+                ns = {
+                    'c': 'http://schemas.openxmlformats.org/drawingml/2006/chart',
+                    'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
+                }
+                
+                # Add data labels to all series
+                for ser in root.findall('.//c:ser', ns):
+                    # Check if dLbls already exists
+                    dlbls = ser.find('c:dLbls', ns)
+                    if dlbls is None:
+                        # Create new dLbls element
+                        dlbls = etree.SubElement(ser, '{http://schemas.openxmlformats.org/drawingml/2006/chart}dLbls')
+                        
+                        # Add showVal attribute (show values on chart)
+                        show_val = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}showVal')
+                        show_val.set('val', '1')
+                        
+                        # Add separator
+                        separator = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}separator')
+                        separator.text = ' '
+                
+                # Write modified XML back
+                with open(chart_path, 'wb') as f:
+                    f.write(etree.tostring(tree, xml_declaration=True, encoding='UTF-8', standalone=True))
+        
+        # Rebuild the Excel file
+        import shutil
+        os.remove(filepath)
+        
+        with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root_dir, dirs, files in os.walk(temp_path):
+                for file in files:
+                    file_path = os.path.join(root_dir, file)
+                    arcname = os.path.relpath(file_path, temp_path)
+                    zipf.write(file_path, arcname)
+        
+        # Clean up temp directory
+        shutil.rmtree(temp_path)
+        
+    except Exception as e:
+        # Clean up if something goes wrong
+        try:
+            import shutil
+            if os.path.exists(temp_path):
+                shutil.rmtree(temp_path)
+        except:
+            pass
+        raise
 
 def format_portfolio_universal(filepath):
     """
@@ -112,6 +189,13 @@ def format_portfolio_universal(filepath):
     
     # Save the workbook
     wb.save(filepath)
+    
+    # Enhance charts with data labels and other advanced features
+    try:
+        enhance_chart_features(filepath)
+    except Exception as e:
+        pass  # Charts are optional
+    
     print(f"[OK] File saved successfully!\n")
 
 
@@ -493,9 +577,20 @@ def add_charts_to_executive_summary(wb):
             ws_exec['J3'].value = "Month"
             ws_exec['K3'].value = "Monthly Profit"
             
+            ws_exec['J3'].value = "Month"
+            ws_exec['K3'].value = "Monthly Profit"
+            
+            # Prepare data with positive/negative separation for color-coding
             for i, (month, profit) in enumerate(zip(months, monthly_profits)):
                 ws_exec[f'J{4+i}'].value = month
                 ws_exec[f'K{4+i}'].value = profit
+                # Split into positive (column L) and negative (column M) for color-coding
+                ws_exec[f'L{4+i}'].value = profit if profit >= 0 else 0
+                ws_exec[f'M{4+i}'].value = profit if profit < 0 else 0
+            
+            # Set headers for color-coded series
+            ws_exec['L3'].value = "Gains"
+            ws_exec['M3'].value = "Losses"
             
             # Portfolio Growth Line Chart
             portfolio_chart = LineChart()
@@ -505,19 +600,20 @@ def add_charts_to_executive_summary(wb):
             portfolio_chart.x_axis.title = "Month"
             portfolio_chart.height = 10
             portfolio_chart.width = 16
-            portfolio_chart.legend.position = 'b'  # Legend at bottom
+            portfolio_chart.legend.position = 'b'
             
             data = Reference(ws_exec, min_col=8, min_row=3, max_row=3+len(portfolio_values))
             categories = Reference(ws_exec, min_col=7, min_row=4, max_row=3+len(portfolio_values))
             portfolio_chart.add_data(data, titles_from_data=True)
             portfolio_chart.set_categories(categories)
             
+            # Enhanced line styling
             portfolio_chart.series[0].graphicalProperties.line.solidFill = "1F4788"
-            portfolio_chart.series[0].graphicalProperties.line.width = 25000
+            portfolio_chart.series[0].graphicalProperties.line.width = 30000  # Thicker line
             
             ws_exec.add_chart(portfolio_chart, "F1")
             
-            # Monthly Returns Bar Chart
+            # Monthly Returns Bar Chart with Color-Coding
             returns_chart = BarChart()
             returns_chart.type = "col"
             returns_chart.title = "Monthly Returns - 12 Month Performance"
@@ -526,15 +622,25 @@ def add_charts_to_executive_summary(wb):
             returns_chart.x_axis.title = "Month"
             returns_chart.height = 10
             returns_chart.width = 16
-            returns_chart.legend.position = 'b'  # Legend at bottom
+            returns_chart.legend.position = 'b'
             
-            data = Reference(ws_exec, min_col=11, min_row=3, max_row=3+len(monthly_profits))
             categories = Reference(ws_exec, min_col=10, min_row=4, max_row=3+len(monthly_profits))
-            returns_chart.add_data(data, titles_from_data=True)
+            
+            # Add positive returns (Gains) - Green
+            gains_data = Reference(ws_exec, min_col=12, min_row=3, max_row=3+len(monthly_profits))
+            returns_chart.add_data(gains_data, titles_from_data=True)
+            
+            # Add negative returns (Losses) - Red
+            losses_data = Reference(ws_exec, min_col=13, min_row=3, max_row=3+len(monthly_profits))
+            returns_chart.add_data(losses_data, titles_from_data=True)
+            
             returns_chart.set_categories(categories)
             
-            returns_chart.series[0].graphicalProperties.solidFill = "4472C4"
+            # Color-code: Green for gains, Red for losses
+            returns_chart.series[0].graphicalProperties.solidFill = "70AD47"  # Green
+            returns_chart.series[1].graphicalProperties.solidFill = "C5504F"  # Red
             
+            # Add data labels through XML manipulation after adding chart
             ws_exec.add_chart(returns_chart, "F20")
     
     except Exception as e:
