@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
 import os
-import io
-
-# Fix Unicode output for Windows console
-if sys.platform == 'win32':
-    # Reconfigure stdout to use UTF-8 encoding
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side

@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
 import sys
 import os
-import io
-
-# Fix Unicode output for Windows console
-if sys.platform == 'win32':
-    # Reconfigure stdout to use UTF-8 encoding
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.chart import LineChart, BarChart, Reference
+
+# Import restructuring function from restructure_type_b.py
+try:
+    from restructure_type_b import restructure_type_b_to_type_a
+except ImportError:
+    # If import fails, define a fallback
+    def restructure_type_b_to_type_a(filepath):
+        print("  ! Warning: Could not import restructure function")
+        return False
 
 def safe_merge_cells(ws, cell_range):
     """
@@ -90,9 +93,19 @@ def format_portfolio_universal(filepath):
     
     elif is_type_b:
         print("  -> Detected: Type B (Data sheet structure)")
-        format_type_b(wb, header_fill, subheader_fill, metric_fill, data_fill,
-                     section_fills, header_font, title_font, subheader_font, bold_font,
-                     regular_font, thin_border)
+        print("  -> Restructuring to Type A format...")
+        
+        # Restructure Type B to Type A
+        if restructure_type_b_to_type_a(filepath):
+            # Reload the restructured file
+            wb = load_workbook(filepath)
+            print("  -> Applying Type A formatting to restructured file...")
+            format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlight_fill,
+                                  header_font, title_font, subheader_font, bold_font, regular_font,
+                                  thin_border, thick_border, section_fills)
+        else:
+            print("  ! Warning: Restructuring failed, skipping file")
+            return
     
     else:
         print("  ! Warning: Unknown file structure. Attempting basic formatting...")
