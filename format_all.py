@@ -173,6 +173,49 @@ def format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlig
     # ========== FORMAT EXTENDED SECTIONS ==========
     
     # Trading Activity Summary (rows 16-20)
+    # Extract trading data from Monthly Performance sheet
+    if 'Monthly Performance' in wb.sheetnames and ws_exec['A16'].value and 'TRADING' in str(ws_exec['A16'].value).upper():
+        ws_monthly = wb['Monthly Performance']
+        
+        # Find trading activity section in Monthly Performance
+        total_trades = 0
+        buy_trades = 0
+        sell_trades = 0
+        
+        for row in range(1, ws_monthly.max_row + 1):
+            cell_val = str(ws_monthly[f'A{row}'].value or '').upper()
+            if 'TOTAL TRADES' in cell_val and 'TURNOVER' not in cell_val:
+                # Sum all values in this row
+                for col in range(2, ws_monthly.max_column + 1):
+                    val = ws_monthly.cell(row=row, column=col).value
+                    if val:
+                        try:
+                            total_trades += float(val) if isinstance(val, (int, float)) else 0
+                        except:
+                            pass
+            elif 'BUY TRADES' in cell_val or 'BUY TRANSACTIONS' in cell_val:
+                for col in range(2, ws_monthly.max_column + 1):
+                    val = ws_monthly.cell(row=row, column=col).value
+                    if val:
+                        try:
+                            buy_trades += float(val) if isinstance(val, (int, float)) else 0
+                        except:
+                            pass
+            elif 'SELL TRADES' in cell_val or 'SELL TRANSACTIONS' in cell_val:
+                for col in range(2, ws_monthly.max_column + 1):
+                    val = ws_monthly.cell(row=row, column=col).value
+                    if val:
+                        try:
+                            sell_trades += float(val) if isinstance(val, (int, float)) else 0
+                        except:
+                            pass
+        
+        # Populate trading activity data
+        if total_trades > 0:
+            ws_exec['B17'].value = f"{int(total_trades)}"
+            ws_exec['B18'].value = f"{int(buy_trades)}"
+            ws_exec['B19'].value = f"{int(sell_trades)}"
+    
     if ws_exec['A16'].value and 'TRADING' in str(ws_exec['A16'].value).upper():
         ws_exec['A16'].font = subheader_font
         ws_exec['A16'].fill = subheader_fill
