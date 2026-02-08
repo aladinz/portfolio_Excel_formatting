@@ -30,6 +30,131 @@ def safe_merge_cells(ws, cell_range):
         # If merge fails, silently continue - data is more important than formatting
         pass
 
+def add_performance_summary_metrics(ws_monthly):
+    """
+    Add Performance Summary Metrics section showing:
+    - Win Rate % (winning months / total)
+    - Average Profit (winning months only)
+    - Average Loss (losing months only)
+    - Profit Factor (total gains / absolute total losses)
+    - Largest Win & Largest Loss
+    """
+    try:
+        # Find the profit row (usually row 8 - Monthly Profit)
+        profit_row = None
+        for row in range(1, min(15, ws_monthly.max_row + 1)):
+            cell_val = str(ws_monthly[f'A{row}'].value or '').upper()
+            if 'MONTHLY PROFIT' in cell_val or (row == 8):
+                profit_row = row
+                break
+        
+        if not profit_row:
+            return
+        
+        # Start Performance Summary section after Cash Position (around row 28)
+        summary_start_row = 28
+        
+        # Section Header
+        ws_monthly[f'A{summary_start_row}'].value = "Performance Summary"
+        ws_monthly[f'A{summary_start_row}'].font = Font(bold=True, size=12, color="FFFFFF")
+        ws_monthly[f'A{summary_start_row}'].fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        safe_merge_cells(ws_monthly, f'A{summary_start_row}:M{summary_start_row}')
+        ws_monthly[f'A{summary_start_row}'].alignment = Alignment(horizontal='left', vertical='center')
+        ws_monthly.row_dimensions[summary_start_row].height = 20
+        
+        # Collect profit values from months (columns B-M, row 8)
+        profits = []
+        wins = []
+        losses = []
+        
+        for col in range(2, 14):  # B through M (12 months)
+            col_letter = get_column_letter(col)
+            try:
+                val = ws_monthly[f'{col_letter}{profit_row}'].value
+                if val is not None:
+                    if isinstance(val, str):
+                        val = float(val.replace('$', '').replace(',', ''))
+                    else:
+                        val = float(val)
+                    profits.append(val)
+                    
+                    if val >= 0:
+                        wins.append(val)
+                    else:
+                        losses.append(val)
+            except:
+                pass
+        
+        # Calculate metrics
+        total_months = len(profits)
+        win_count = len(wins)
+        loss_count = len(losses)
+        win_rate = (win_count / total_months * 100) if total_months > 0 else 0
+        
+        avg_profit = sum(wins) / len(wins) if wins else 0
+        avg_loss = sum(losses) / len(losses) if losses else 0
+        profit_factor = sum(wins) / abs(sum(losses)) if sum(losses) != 0 else (sum(wins) if sum(wins) > 0 else 0)
+        
+        largest_win = max(wins) if wins else 0
+        largest_loss = min(losses) if losses else 0
+        
+        # Metrics to display
+        metrics = [
+            ("Win Rate", f"{win_rate:.1f}%"),
+            ("Wins / Losses", f"{win_count} / {loss_count}"),
+            ("Avg Profit", f"${avg_profit:,.2f}"),
+            ("Avg Loss", f"${avg_loss:,.2f}"),
+            ("Profit Factor", f"{profit_factor:.2f}"),
+            ("Largest Win", f"${largest_win:,.2f}"),
+            ("Largest Loss", f"${largest_loss:,.2f}"),
+        ]
+        
+        # Display metrics with formatting
+        metric_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+        metric_font = Font(bold=True, size=11, color="1F4788")
+        value_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+        value_font = Font(bold=True, size=11, color="000000")
+        
+        for idx, (metric_name, metric_value) in enumerate(metrics):
+            row = summary_start_row + 1 + idx
+            
+            # Metric name
+            ws_monthly[f'A{row}'].value = metric_name
+            ws_monthly[f'A{row}'].font = metric_font
+            ws_monthly[f'A{row}'].fill = metric_fill
+            ws_monthly[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center')
+            ws_monthly[f'A{row}'].border = Border(
+                left=Side(style='thin', color='4472C4'),
+                right=Side(style='thin', color='4472C4'),
+                top=Side(style='thin', color='4472C4'),
+                bottom=Side(style='thin', color='4472C4')
+            )
+            
+            # Metric value
+            ws_monthly[f'B{row}'].value = metric_value
+            ws_monthly[f'B{row}'].font = value_font
+            ws_monthly[f'B{row}'].fill = value_fill
+            ws_monthly[f'B{row}'].alignment = Alignment(horizontal='right', vertical='center')
+            ws_monthly[f'B{row}'].border = Border(
+                left=Side(style='thin', color='4472C4'),
+                right=Side(style='thin', color='4472C4'),
+                top=Side(style='thin', color='4472C4'),
+                bottom=Side(style='thin', color='4472C4')
+            )
+            
+            # Merge remaining columns
+            if row < summary_start_row + len(metrics):
+                try:
+                    safe_merge_cells(ws_monthly, f'B{row}:M{row}')
+                except:
+                    pass
+            
+            ws_monthly.row_dimensions[row].height = 18
+            
+    except Exception as e:
+        # Performance metrics are optional
+        pass
+
 def add_win_loss_sparklines(ws_monthly):
     """
     Add win/loss visual indicators to Monthly Performance sheet showing profit/loss patterns.
@@ -603,6 +728,9 @@ def format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlig
     ws_monthly.column_dimensions['A'].width = 28
     for col in range(2, 14):
         ws_monthly.column_dimensions[get_column_letter(col)].width = 14
+    
+    # Add performance summary metrics
+    add_performance_summary_metrics(ws_monthly)
     
     # Add win/loss sparklines for visual trend indication
     add_win_loss_sparklines(ws_monthly)
