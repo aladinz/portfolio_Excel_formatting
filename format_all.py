@@ -488,7 +488,53 @@ def format_type_b(wb, header_fill, subheader_fill, metric_fill, data_fill,
                  section_fills, header_font, title_font, subheader_font, bold_font,
                  regular_font, thin_border):
     """Format Type B files (Data sheet only)"""
-    # Placeholder - Type B files are typically restructured to Type A
+    
+    ws = wb['Data']
+    
+    # Apply header formatting to first row (months)
+    for col in range(1, ws.max_column + 1):
+        cell = ws.cell(row=1, column=col)
+        cell.fill = header_fill
+        cell.font = title_font
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = thin_border
+    
+    ws.row_dimensions[1].height = 25
+    
+    # Apply formatting to data rows
+    for row in range(2, ws.max_row + 1):
+        # First column (metric names) gets darker formatting
+        cell_a = ws.cell(row=row, column=1)
+        cell_a.fill = subheader_fill
+        cell_a.font = Font(bold=True, size=10, color="FFFFFF")
+        cell_a.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        cell_a.border = thin_border
+        
+        # Data columns get light formatting with borders
+        for col in range(2, ws.max_column + 1):
+            cell = ws.cell(row=row, column=col)
+            cell.fill = data_fill
+            cell.font = regular_font
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = thin_border
+            
+            # Format numbers with currency if they contain currency symbols
+            if cell.value and isinstance(cell.value, str) and '$' in str(cell.value):
+                cell.number_format = '$#,##0.00'
+    
+    # Optimize column widths
+    for col in range(1, ws.max_column + 1):
+        max_length = 0
+        column_letter = get_column_letter(col)
+        
+        for row in range(1, ws.max_row + 1):
+            cell = ws.cell(row=row, column=col)
+            if cell.value:
+                max_length = max(max_length, len(str(cell.value)))
+        
+        adjusted_width = min(max_length + 2, 30)
+        ws.column_dimensions[column_letter].width = adjusted_width
+    
     print("  [OK] Data sheet formatting applied")
 
 
