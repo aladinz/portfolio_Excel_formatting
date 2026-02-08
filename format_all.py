@@ -505,6 +505,7 @@ def add_charts_to_executive_summary(wb):
             portfolio_chart.x_axis.title = "Month"
             portfolio_chart.height = 10
             portfolio_chart.width = 16
+            portfolio_chart.legend.position = 'b'  # Legend at bottom
             
             data = Reference(ws_exec, min_col=8, min_row=3, max_row=3+len(portfolio_values))
             categories = Reference(ws_exec, min_col=7, min_row=4, max_row=3+len(portfolio_values))
@@ -525,6 +526,7 @@ def add_charts_to_executive_summary(wb):
             returns_chart.x_axis.title = "Month"
             returns_chart.height = 10
             returns_chart.width = 16
+            returns_chart.legend.position = 'b'  # Legend at bottom
             
             data = Reference(ws_exec, min_col=11, min_row=3, max_row=3+len(monthly_profits))
             categories = Reference(ws_exec, min_col=10, min_row=4, max_row=3+len(monthly_profits))
