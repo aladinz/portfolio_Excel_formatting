@@ -30,6 +30,71 @@ def safe_merge_cells(ws, cell_range):
         # If merge fails, silently continue - data is more important than formatting
         pass
 
+def add_win_loss_sparklines(ws_monthly):
+    """
+    Add win/loss visual indicators to Monthly Performance sheet showing profit/loss patterns.
+    Uses color-coded cells (green for gains, red for losses) as visual sparklines.
+    """
+    try:
+        # Find the row with "Profit" label (usually row 8 - "Monthly Profit")
+        profit_row = None
+        for row in range(1, min(15, ws_monthly.max_row + 1)):
+            cell_val = str(ws_monthly[f'A{row}'].value or '').upper()
+            if 'MONTHLY PROFIT' in cell_val or (row == 8):  # Fallback to row 8
+                profit_row = row
+                break
+        
+        if profit_row:
+            # Add win/loss indicator row below profit data
+            indicator_row = profit_row + 1
+            
+            # Format the indicator row label
+            ws_monthly[f'A{indicator_row}'].value = "Win/Loss Indicator"
+            ws_monthly[f'A{indicator_row}'].font = Font(bold=True, size=9, color="FFFFFF")
+            ws_monthly[f'A{indicator_row}'].fill = PatternFill(start_color="595959", end_color="595959", fill_type="solid")
+            ws_monthly[f'A{indicator_row}'].alignment = Alignment(horizontal='center', vertical='center')
+            
+            # Add color-coded win/loss indicators for columns B through M (12 months)
+            for col in range(2, 14):  # Columns B-M
+                col_letter = get_column_letter(col)
+                indicator_cell = ws_monthly[f'{col_letter}{indicator_row}']
+                profit_cell = ws_monthly[f'{col_letter}{profit_row}']
+                
+                try:
+                    # Get the profit value
+                    profit_val = profit_cell.value
+                    if profit_val is not None:
+                        if isinstance(profit_val, str):
+                            profit_val = float(profit_val.replace('$', '').replace(',', ''))
+                        else:
+                            profit_val = float(profit_val)
+                        
+                        # Color code: Green for positive (WIN), Red for negative (LOSS)
+                        if profit_val >= 0:
+                            indicator_cell.value = "W"  # Win
+                            indicator_cell.fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+                            indicator_cell.font = Font(bold=True, size=11, color="FFFFFF")
+                        else:
+                            indicator_cell.value = "L"  # Loss
+                            indicator_cell.fill = PatternFill(start_color="C5504F", end_color="C5504F", fill_type="solid")
+                            indicator_cell.font = Font(bold=True, size=11, color="FFFFFF")
+                        
+                        indicator_cell.alignment = Alignment(horizontal='center', vertical='center')
+                        indicator_cell.border = Border(
+                            left=Side(style='thin', color='000000'),
+                            right=Side(style='thin', color='000000'),
+                            top=Side(style='thin', color='000000'),
+                            bottom=Side(style='thin', color='000000')
+                        )
+                except:
+                    pass
+            
+            ws_monthly.row_dimensions[indicator_row].height = 18
+            
+    except Exception as e:
+        # Win/loss indicators are optional
+        pass
+
 def enhance_chart_features(filepath):
     """
     Enhance charts with intelligent formatting for clean, professional appearance.
@@ -539,6 +604,9 @@ def format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlig
     for col in range(2, 14):
         ws_monthly.column_dimensions[get_column_letter(col)].width = 14
     
+    # Add win/loss sparklines for visual trend indication
+    add_win_loss_sparklines(ws_monthly)
+    
     print("  [OK] Monthly Performance formatted")
     
     # ========== ADD CHARTS ==========
@@ -627,7 +695,7 @@ def add_charts_to_executive_summary(wb):
             portfolio_chart.x_axis.title = "Month"
             portfolio_chart.height = 10
             portfolio_chart.width = 16
-            portfolio_chart.legend.position = 'b'
+            portfolio_chart.legend = None  # Remove legend - hover shows data
             
             data = Reference(ws_exec, min_col=8, min_row=3, max_row=3+len(portfolio_values))
             categories = Reference(ws_exec, min_col=7, min_row=4, max_row=3+len(portfolio_values))
@@ -649,7 +717,7 @@ def add_charts_to_executive_summary(wb):
             returns_chart.x_axis.title = "Month"
             returns_chart.height = 10
             returns_chart.width = 16
-            returns_chart.legend.position = 'b'
+            returns_chart.legend = None  # Remove legend - hover shows data
             
             # Use original profit data for single series visualization
             categories = Reference(ws_exec, min_col=10, min_row=4, max_row=3+len(monthly_profits))
