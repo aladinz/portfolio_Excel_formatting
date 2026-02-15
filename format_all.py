@@ -1,967 +1,138 @@
 # -*- coding: utf-8 -*-
+"""
+MASTER PORTFOLIO FORMATTER
+Automatically routes files to appropriate formatters:
+- Individual portfolios (Type A/B)
+- Net Worth consolidation files
+"""
+
 import sys
-import os
-
+from pathlib import Path
 from openpyxl import load_workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
-from openpyxl.chart import LineChart, BarChart, Reference
-from openpyxl.chart.label import DataLabelList
 
-# Import restructuring function from restructure_type_b.py
-try:
-    from restructure_type_b import restructure_type_b_to_type_a
-except ImportError:
-    # If import fails, define a fallback
-    def restructure_type_b_to_type_a(filepath):
-        print("  ! Warning: Could not import restructure function")
-        return False
+# Import formatters
+from format_net_worth import format_net_worth_file
 
-def safe_merge_cells(ws, cell_range):
+
+def detect_file_type(filepath):
     """
-    Safely merge cells by checking for conflicts first.
-    This prevents Excel corruption from overlapping or conflicting merges.
+    Detect file type: 'net_worth', 'type_a', 'type_b', or 'unknown'
     """
     try:
-        # Simply try to merge - if it fails, continue anyway
-        # The merged_cells registry will handle it
-        ws.merge_cells(cell_range)
-    except Exception as e:
-        # If merge fails, silently continue - data is more important than formatting
-        pass
-
-def add_performance_summary_metrics(ws_monthly):
-    """
-    Add Performance Summary Metrics section showing:
-    - Win Rate % (winning months / total)
-    - Average Profit (winning months only)
-    - Average Loss (losing months only)
-    - Profit Factor (total gains / absolute total losses)
-    - Largest Win & Largest Loss
-    """
-    try:
-        # Find the profit row (usually row 8 - Monthly Profit)
-        profit_row = None
-        for row in range(1, min(15, ws_monthly.max_row + 1)):
-            cell_val = str(ws_monthly[f'A{row}'].value or '').upper()
-            if 'MONTHLY PROFIT' in cell_val or (row == 8):
-                profit_row = row
-                break
+        wb = load_workbook(filepath)
         
-        if not profit_row:
-            return
+        # Check for Net Worth file FIRST (before checking for Executive Summary)
+        if 'Data' in wb.sheetnames:
+            # Check if it has consolidated structure (S&P 500 comparison)
+            ws = wb['Data']
+            
+            for row in range(1, min(36, ws.max_row + 1)):
+                cell_value = str(ws[f'A{row}'].value or '').upper()
+                if 'NET WORTH' in cell_value or ('S&P' in cell_value and 'MARKET' in cell_value):
+                    return 'net_worth'
         
-        # Start Performance Summary section after Cash Position (around row 28)
-        summary_start_row = 28
-        
-        # Section Header
-        ws_monthly[f'A{summary_start_row}'].value = "Performance Summary"
-        ws_monthly[f'A{summary_start_row}'].font = Font(bold=True, size=12, color="FFFFFF")
-        ws_monthly[f'A{summary_start_row}'].fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-        safe_merge_cells(ws_monthly, f'A{summary_start_row}:M{summary_start_row}')
-        ws_monthly[f'A{summary_start_row}'].alignment = Alignment(horizontal='left', vertical='center')
-        ws_monthly.row_dimensions[summary_start_row].height = 20
-        
-        # Collect profit values from months (columns B-M, row 8)
-        profits = []
-        wins = []
-        losses = []
-        
-        for col in range(2, 14):  # B through M (12 months)
-            col_letter = get_column_letter(col)
+        # Check for Type A (has Executive Summary - but not Net Worth)
+        if 'Executive Summary' in wb.sheetnames:
+            # Check if this Executive Summary is for Net Worth consolidation
             try:
-                val = ws_monthly[f'{col_letter}{profit_row}'].value
-                if val is not None:
-                    if isinstance(val, str):
-                        val = float(val.replace('$', '').replace(',', ''))
-                    else:
-                        val = float(val)
-                    profits.append(val)
-                    
-                    if val >= 0:
-                        wins.append(val)
-                    else:
-                        losses.append(val)
+                ws_exec = wb['Executive Summary']
+                title = str(ws_exec['A1'].value or '').upper()
+                if 'NET WORTH' in title:
+                    return 'net_worth'
             except:
                 pass
-        
-        # Calculate metrics
-        total_months = len(profits)
-        win_count = len(wins)
-        loss_count = len(losses)
-        win_rate = (win_count / total_months * 100) if total_months > 0 else 0
-        
-        avg_profit = sum(wins) / len(wins) if wins else 0
-        avg_loss = sum(losses) / len(losses) if losses else 0
-        profit_factor = sum(wins) / abs(sum(losses)) if sum(losses) != 0 else (sum(wins) if sum(wins) > 0 else 0)
-        
-        largest_win = max(wins) if wins else 0
-        largest_loss = min(losses) if losses else 0
-        
-        # Metrics to display
-        metrics = [
-            ("Win Rate", f"{win_rate:.1f}%"),
-            ("Wins / Losses", f"{win_count} / {loss_count}"),
-            ("Avg Profit", f"${avg_profit:,.2f}"),
-            ("Avg Loss", f"${avg_loss:,.2f}"),
-            ("Profit Factor", f"{profit_factor:.2f}"),
-            ("Largest Win", f"${largest_win:,.2f}"),
-            ("Largest Loss", f"${largest_loss:,.2f}"),
-        ]
-        
-        # Display metrics with formatting
-        metric_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
-        metric_font = Font(bold=True, size=11, color="1F4788")
-        value_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-        value_font = Font(bold=True, size=11, color="000000")
-        
-        for idx, (metric_name, metric_value) in enumerate(metrics):
-            row = summary_start_row + 1 + idx
             
-            # Metric name
-            ws_monthly[f'A{row}'].value = metric_name
-            ws_monthly[f'A{row}'].font = metric_font
-            ws_monthly[f'A{row}'].fill = metric_fill
-            ws_monthly[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center')
-            ws_monthly[f'A{row}'].border = Border(
-                left=Side(style='thin', color='4472C4'),
-                right=Side(style='thin', color='4472C4'),
-                top=Side(style='thin', color='4472C4'),
-                bottom=Side(style='thin', color='4472C4')
-            )
-            
-            # Metric value
-            ws_monthly[f'B{row}'].value = metric_value
-            ws_monthly[f'B{row}'].font = value_font
-            ws_monthly[f'B{row}'].fill = value_fill
-            ws_monthly[f'B{row}'].alignment = Alignment(horizontal='right', vertical='center')
-            ws_monthly[f'B{row}'].border = Border(
-                left=Side(style='thin', color='4472C4'),
-                right=Side(style='thin', color='4472C4'),
-                top=Side(style='thin', color='4472C4'),
-                bottom=Side(style='thin', color='4472C4')
-            )
-            
-            # Merge remaining columns
-            if row < summary_start_row + len(metrics):
-                try:
-                    safe_merge_cells(ws_monthly, f'B{row}:M{row}')
-                except:
-                    pass
-            
-            ws_monthly.row_dimensions[row].height = 18
-            
+            return 'type_a'
+        
+        # Check for Type B (single Data sheet, individual portfolio)
+        if 'Data' in wb.sheetnames and len(wb.sheetnames) == 1:
+            return 'type_b'
+        
+        return 'unknown'
+    
     except Exception as e:
-        # Performance metrics are optional
-        pass
+        print(f"  [ERROR] Could not determine file type: {str(e)}")
+        return 'unknown'
 
-def add_win_loss_sparklines(ws_monthly):
+
+def format_individual_portfolio(filepath):
     """
-    Add win/loss visual indicators to Monthly Performance sheet showing profit/loss patterns.
-    Uses color-coded cells (green for gains, red for losses) as visual sparklines.
+    Format individual portfolio file (Type A or B)
+    This is a placeholder for basic formatting.
     """
+    print(f"Processing individual portfolio: {filepath}")
     try:
-        # Find the row with "Profit" label (usually row 8 - "Monthly Profit")
-        profit_row = None
-        for row in range(1, min(15, ws_monthly.max_row + 1)):
-            cell_val = str(ws_monthly[f'A{row}'].value or '').upper()
-            if 'MONTHLY PROFIT' in cell_val or (row == 8):  # Fallback to row 8
-                profit_row = row
-                break
+        wb = load_workbook(filepath)
         
-        if profit_row:
-            # Add win/loss indicator row below profit data
-            indicator_row = profit_row + 1
+        # Define colors
+        header_fill = "1F4788"
+        subheader_fill = "4472C4"
+        
+        # Apply basic formatting to all sheets
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        
+        header_font = Font(bold=True, size=11, color="FFFFFF")
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
             
-            # Format the indicator row label
-            ws_monthly[f'A{indicator_row}'].value = "Win/Loss Indicator"
-            ws_monthly[f'A{indicator_row}'].font = Font(bold=True, size=9, color="FFFFFF")
-            ws_monthly[f'A{indicator_row}'].fill = PatternFill(start_color="595959", end_color="595959", fill_type="solid")
-            ws_monthly[f'A{indicator_row}'].alignment = Alignment(horizontal='center', vertical='center')
-            
-            # Add color-coded win/loss indicators for columns B through M (12 months)
-            for col in range(2, 14):  # Columns B-M
-                col_letter = get_column_letter(col)
-                indicator_cell = ws_monthly[f'{col_letter}{indicator_row}']
-                profit_cell = ws_monthly[f'{col_letter}{profit_row}']
-                
-                try:
-                    # Get the profit value
-                    profit_val = profit_cell.value
-                    if profit_val is not None:
-                        if isinstance(profit_val, str):
-                            profit_val = float(profit_val.replace('$', '').replace(',', ''))
-                        else:
-                            profit_val = float(profit_val)
-                        
-                        # Color code: Green for positive (WIN), Red for negative (LOSS)
-                        if profit_val >= 0:
-                            indicator_cell.value = "W"  # Win
-                            indicator_cell.fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
-                            indicator_cell.font = Font(bold=True, size=11, color="FFFFFF")
-                        else:
-                            indicator_cell.value = "L"  # Loss
-                            indicator_cell.fill = PatternFill(start_color="C5504F", end_color="C5504F", fill_type="solid")
-                            indicator_cell.font = Font(bold=True, size=11, color="FFFFFF")
-                        
-                        indicator_cell.alignment = Alignment(horizontal='center', vertical='center')
-                        indicator_cell.border = Border(
-                            left=Side(style='thin', color='000000'),
-                            right=Side(style='thin', color='000000'),
-                            top=Side(style='thin', color='000000'),
-                            bottom=Side(style='thin', color='000000')
-                        )
-                except:
-                    pass
-            
-            ws_monthly.row_dimensions[indicator_row].height = 18
-            
+            # Format first row as header if it contains labels
+            if ws['A1'].value:
+                for col in range(1, ws.max_column + 1):
+                    cell = ws.cell(1, col)
+                    if cell.value:
+                        cell.font = header_font
+                        cell.fill = PatternFill(start_color=header_fill, end_color=header_fill, fill_type="solid")
+                        cell.border = thin_border
+        
+        wb.save(filepath)
+        print(f"[OK] Individual portfolio formatted!\n")
+        return True
+    
     except Exception as e:
-        # Win/loss indicators are optional
-        pass
+        print(f"  [ERROR] {str(e)}")
+        return False
 
-def enhance_chart_features(filepath):
-    """
-    Enhance charts with intelligent formatting for clean, professional appearance.
-    - Removes default data labels for clean look
-    - Adds labels only on peak/valley points and key data
-    """
-    import zipfile
-    import os
-    from lxml import etree
-    
-    temp_path = filepath + '.temp'
-    
-    try:
-        # Extract the Excel file
-        with zipfile.ZipFile(filepath, 'r') as zip_ref:
-            zip_ref.extractall(temp_path)
-        
-        # Modify chart XML files
-        for chart_num in [1, 2]:
-            chart_path = os.path.join(temp_path, f'xl/charts/chart{chart_num}.xml')
-            if os.path.exists(chart_path):
-                tree = etree.parse(chart_path)
-                root = tree.getroot()
-                
-                # Define namespaces
-                ns = {
-                    'c': 'http://schemas.openxmlformats.org/drawingml/2006/chart',
-                    'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
-                }
-                
-                # Remove all existing data labels for clean look
-                for dlbls in root.findall('.//c:dLbls', ns):
-                    parent = dlbls.getparent()
-                    if parent is not None:
-                        parent.remove(dlbls)
-                
-                # For chart 2 (Monthly Returns bar chart), add smart labels
-                if chart_num == 2:
-                    for i, ser in enumerate(root.findall('.//c:ser', ns)):
-                        # Get data values to find max
-                        val_refs = ser.findall('.//c:val', ns)
-                        if val_refs:
-                            nums = val_refs[0].findall('.//c:v', ns)
-                            
-                            if len(nums) > 0:
-                                # Find max and min indices
-                                try:
-                                    values = [float(n.text or 0) for n in nums]
-                                    max_idx = values.index(max(values))
-                                    min_idx = values.index(min(values)) if min(values) != max(values) else -1
-                                    
-                                    # Create data labels only for key points
-                                    dlbls = etree.SubElement(ser, '{http://schemas.openxmlformats.org/drawingml/2006/chart}dLbls')
-                                    
-                                    # Hide all labels by default
-                                    show_legend_key = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}showLegendKey')
-                                    show_legend_key.set('val', '0')
-                                    
-                                    show_val = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}showVal')
-                                    show_val.set('val', '1')
-                                    
-                                    show_cat = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}showCatName')
-                                    show_cat.set('val', '0')
-                                    
-                                    # Add data point labels only for max
-                                    dLbl_max = etree.SubElement(dlbls, '{http://schemas.openxmlformats.org/drawingml/2006/chart}dLbl')
-                                    idx_max = etree.SubElement(dLbl_max, '{http://schemas.openxmlformats.org/drawingml/2006/chart}idx')
-                                    idx_max.set('val', str(max_idx))
-                                    
-                                    dLbl_show_max = etree.SubElement(dLbl_max, '{http://schemas.openxmlformats.org/drawingml/2006/chart}showVal')
-                                    dLbl_show_max.set('val', '1')
-                                    
-                                except:
-                                    pass
-                
-                # Write modified XML back
-                with open(chart_path, 'wb') as f:
-                    f.write(etree.tostring(tree, xml_declaration=True, encoding='UTF-8', standalone=True))
-        
-        # Rebuild the Excel file
-        import shutil
-        os.remove(filepath)
-        
-        with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root_dir, dirs, files in os.walk(temp_path):
-                for file in files:
-                    file_path = os.path.join(root_dir, file)
-                    arcname = os.path.relpath(file_path, temp_path)
-                    zipf.write(file_path, arcname)
-        
-        # Clean up temp directory
-        shutil.rmtree(temp_path)
-        
-    except Exception as e:
-        # Clean up if something goes wrong
-        try:
-            import shutil
-            if os.path.exists(temp_path):
-                shutil.rmtree(temp_path)
-        except:
-            pass
-        raise
 
-def format_portfolio_universal(filepath):
+def format_portfolio_file(filepath):
     """
-    Universal formatter for portfolio files with extended Executive Summary sections.
-    Handles all structure types:
-    - Type A with extended sections (Exec Summary + Monthly + Trading/Insights/Actions)
-    - Type A without extended sections (original structure)
-    - Type B (Data only)
+    Main entry point - detects file type and routes to appropriate formatter
     """
+    print(f"\n{'='*60}")
+    print(f"PORTFOLIO FORMATTER v3.0")
+    print(f"{'='*60}\n")
     
-    print(f"\nProcessing: {filepath}")
-    wb = load_workbook(filepath)
+    if not Path(filepath).exists():
+        print(f"[ERROR] File not found: {filepath}")
+        return False
     
-    # Define color scheme
-    header_fill = PatternFill(start_color="1F4788", end_color="1F4788", fill_type="solid")
-    subheader_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-    metric_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
-    highlight_fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+    # Detect file type
+    file_type = detect_file_type(filepath)
+    print(f"File detected as: {file_type.upper()}")
     
-    # Section fills
-    section_fills = {
-        'trading': PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"),
-        'trading_activity': PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid"),
-        'insights': PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid"),
-        'actions': PatternFill(start_color="F4B084", end_color="F4B084", fill_type="solid"),
-        'cash': PatternFill(start_color="F4B084", end_color="F4B084", fill_type="solid"),
-        'market': PatternFill(start_color="F1DCDB", end_color="F1DCDB", fill_type="solid"),
-    }
+    # Route to appropriate formatter
+    if file_type == 'net_worth':
+        return format_net_worth_file(filepath)
     
-    data_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-    
-    # Define fonts
-    header_font = Font(bold=True, size=12, color="FFFFFF")
-    title_font = Font(bold=True, size=16, color="FFFFFF")
-    subheader_font = Font(bold=True, size=11, color="FFFFFF")
-    bold_font = Font(bold=True, size=10)
-    regular_font = Font(size=10)
-    
-    # Define borders
-    thin_border = Border(
-        left=Side(style='thin', color="000000"),
-        right=Side(style='thin', color="000000"),
-        top=Side(style='thin', color="000000"),
-        bottom=Side(style='thin', color="000000")
-    )
-    thick_border = Border(
-        left=Side(style='medium', color="000000"),
-        right=Side(style='medium', color="000000"),
-        top=Side(style='medium', color="000000"),
-        bottom=Side(style='medium', color="000000")
-    )
-    
-    # ========== DETECT FILE STRUCTURE ==========
-    sheets = wb.sheetnames
-    is_type_a = 'Executive Summary' in sheets and 'Monthly Performance' in sheets
-    is_type_b = 'Data' in sheets and len(sheets) == 1
-    
-    if is_type_a:
-        print("  -> Detected: Type A (Executive Summary + Monthly Performance)")
-        format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlight_fill,
-                              header_font, title_font, subheader_font, bold_font, regular_font,
-                              thin_border, thick_border, section_fills)
-    
-    elif is_type_b:
-        print("  -> Detected: Type B (Data sheet structure)")
-        print("  -> Restructuring to Type A format...")
-        
-        # Restructure Type B to Type A
-        if restructure_type_b_to_type_a(filepath):
-            # Reload the restructured file
-            wb = load_workbook(filepath)
-            print("  -> Applying Type A formatting to restructured file...")
-            format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlight_fill,
-                                  header_font, title_font, subheader_font, bold_font, regular_font,
-                                  thin_border, thick_border, section_fills)
-        else:
-            print("  ! Warning: Restructuring failed, skipping file")
-            return
+    elif file_type in ['type_a', 'type_b']:
+        return format_individual_portfolio(filepath)
     
     else:
-        print("  ! Warning: Unknown file structure. Attempting basic formatting...")
-    
-    # Save the workbook
-    wb.save(filepath)
-    
-    # Enhance charts with data labels and other advanced features
-    try:
-        enhance_chart_features(filepath)
-    except Exception as e:
-        pass  # Charts are optional
-    
-    print(f"[OK] File saved successfully!\n")
+        print(f"[ERROR] Unknown file type or format not supported")
+        return False
 
 
-def format_type_a_extended(wb, header_fill, subheader_fill, metric_fill, highlight_fill,
-                           header_font, title_font, subheader_font, bold_font, regular_font,
-                           thin_border, thick_border, section_fills):
-    """Format Type A files with extended Executive Summary sections"""
-    
-    # ========== FORMAT EXECUTIVE SUMMARY ==========
-    ws_exec = wb['Executive Summary']
-    
-    # Title
-    ws_exec['A1'].font = title_font
-    ws_exec['A1'].fill = header_fill
-    ws_exec['A1'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-    safe_merge_cells(ws_exec, 'A1:E1')
-    ws_exec.row_dimensions[1].height = 30
-    
-    # Date
-    ws_exec['A2'].font = Font(italic=True, size=10)
-    ws_exec.row_dimensions[2].height = 18
-    ws_exec.row_dimensions[3].height = 8
-    
-    # KPI Section
-    ws_exec['A4'].font = subheader_font
-    ws_exec['A4'].fill = subheader_fill
-    ws_exec['A4'].alignment = Alignment(horizontal='left', vertical='center')
-    safe_merge_cells(ws_exec, 'A4:E4')
-    ws_exec.row_dimensions[4].height = 22
-    
-    for col_letter in ['A', 'B', 'C']:
-        cell = ws_exec[col_letter + '5']
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        cell.border = thin_border
-    ws_exec.row_dimensions[5].height = 20
-    
-    # Format KPI data rows (6-14)
-    for row in range(6, 15):
-        ws_exec[f'A{row}'].font = bold_font
-        ws_exec[f'A{row}'].fill = metric_fill
-        ws_exec[f'A{row}'].border = thin_border
-        ws_exec[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        
-        ws_exec[f'B{row}'].font = Font(bold=True, size=11)
-        ws_exec[f'B{row}'].fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-        ws_exec[f'B{row}'].border = thin_border
-        ws_exec[f'B{row}'].alignment = Alignment(horizontal='right', vertical='center')
-        
-        ws_exec[f'C{row}'].font = regular_font
-        ws_exec[f'C{row}'].fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-        ws_exec[f'C{row}'].border = thin_border
-        ws_exec[f'C{row}'].alignment = Alignment(horizontal='left', vertical='center')
-        ws_exec.row_dimensions[row].height = 18
-    
-    ws_exec.row_dimensions[15].height = 8
-    
-    # ========== FORMAT EXTENDED SECTIONS ==========
-    
-    # Trading Activity Summary (rows 16-20)
-    # Extract trading data from Monthly Performance sheet
-    if 'Monthly Performance' in wb.sheetnames and ws_exec['A16'].value and 'TRADING' in str(ws_exec['A16'].value).upper():
-        ws_monthly = wb['Monthly Performance']
-        
-        # Find trading activity section in Monthly Performance
-        total_trades = 0
-        buy_trades = 0
-        sell_trades = 0
-        
-        for row in range(1, ws_monthly.max_row + 1):
-            cell_val = str(ws_monthly[f'A{row}'].value or '').upper()
-            if 'TOTAL TRADES' in cell_val and 'TURNOVER' not in cell_val:
-                # Sum all values in this row
-                for col in range(2, ws_monthly.max_column + 1):
-                    val = ws_monthly.cell(row=row, column=col).value
-                    if val:
-                        try:
-                            total_trades += float(val) if isinstance(val, (int, float)) else 0
-                        except:
-                            pass
-            elif 'BUY TRADES' in cell_val or 'BUY TRANSACTIONS' in cell_val:
-                for col in range(2, ws_monthly.max_column + 1):
-                    val = ws_monthly.cell(row=row, column=col).value
-                    if val:
-                        try:
-                            buy_trades += float(val) if isinstance(val, (int, float)) else 0
-                        except:
-                            pass
-            elif 'SELL TRADES' in cell_val or 'SELL TRANSACTIONS' in cell_val:
-                for col in range(2, ws_monthly.max_column + 1):
-                    val = ws_monthly.cell(row=row, column=col).value
-                    if val:
-                        try:
-                            sell_trades += float(val) if isinstance(val, (int, float)) else 0
-                        except:
-                            pass
-        
-        # Populate trading activity data
-        if total_trades > 0:
-            ws_exec['B17'].value = f"{int(total_trades)}"
-            ws_exec['B18'].value = f"{int(buy_trades)}"
-            ws_exec['B19'].value = f"{int(sell_trades)}"
-    
-    if ws_exec['A16'].value and 'TRADING' in str(ws_exec['A16'].value).upper():
-        ws_exec['A16'].font = subheader_font
-        ws_exec['A16'].fill = subheader_fill
-        ws_exec['A16'].alignment = Alignment(horizontal='left', vertical='center')
-        safe_merge_cells(ws_exec, 'A16:E16')
-        ws_exec.row_dimensions[16].height = 22
-        
-        for row in range(17, 21):
-            if ws_exec[f'A{row}'].value:
-                ws_exec[f'A{row}'].font = bold_font
-                ws_exec[f'A{row}'].fill = metric_fill
-                ws_exec[f'A{row}'].border = thin_border
-                ws_exec[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center')
-                
-                for col in ['B', 'C', 'D', 'E']:
-                    cell = ws_exec[f'{col}{row}']
-                    cell.fill = section_fills['trading']
-                    cell.border = thin_border
-                    cell.alignment = Alignment(horizontal='left', vertical='center')
-                
-                ws_exec.row_dimensions[row].height = 18
-    
-    ws_exec.row_dimensions[21].height = 8
-    
-    # Key Insights & Recommendations (rows 22-28)
-    if ws_exec['A22'].value and 'KEY INSIGHTS' in str(ws_exec['A22'].value).upper():
-        ws_exec['A22'].font = subheader_font
-        ws_exec['A22'].fill = subheader_fill
-        ws_exec['A22'].alignment = Alignment(horizontal='left', vertical='center')
-        safe_merge_cells(ws_exec, 'A22:E22')
-        ws_exec.row_dimensions[22].height = 22
-        
-        for row in range(23, 29):
-            if ws_exec[f'A{row}'].value:
-                ws_exec[f'A{row}'].font = regular_font
-                ws_exec[f'A{row}'].fill = section_fills['insights']
-                ws_exec[f'A{row}'].border = thin_border
-                ws_exec[f'A{row}'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
-                
-                for col in ['B', 'C', 'D', 'E']:
-                    cell = ws_exec[f'{col}{row}']
-                    cell.fill = section_fills['insights']
-                    cell.border = thin_border
-                
-                ws_exec.row_dimensions[row].height = 32
-    
-    ws_exec.row_dimensions[29].height = 8
-    
-    # Action Items & Strategy (rows 30-36)
-    if ws_exec['A30'].value and 'ACTION ITEMS' in str(ws_exec['A30'].value).upper():
-        ws_exec['A30'].font = subheader_font
-        ws_exec['A30'].fill = subheader_fill
-        ws_exec['A30'].alignment = Alignment(horizontal='left', vertical='center')
-        safe_merge_cells(ws_exec, 'A30:E30')
-        ws_exec.row_dimensions[30].height = 22
-        
-        for row in range(31, 37):
-            if ws_exec[f'A{row}'].value:
-                ws_exec[f'A{row}'].font = regular_font
-                ws_exec[f'A{row}'].fill = section_fills['actions']
-                ws_exec[f'A{row}'].border = thin_border
-                ws_exec[f'A{row}'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
-                
-                for col in ['B', 'C', 'D', 'E']:
-                    cell = ws_exec[f'{col}{row}']
-                    cell.fill = section_fills['actions']
-                    cell.border = thin_border
-                
-                ws_exec.row_dimensions[row].height = 32
-    
-    # Set column widths
-    ws_exec.column_dimensions['A'].width = 28
-    ws_exec.column_dimensions['B'].width = 45
-    ws_exec.column_dimensions['C'].width = 20
-    ws_exec.column_dimensions['D'].width = 15
-    ws_exec.column_dimensions['E'].width = 15
-    
-    print("  [OK] Executive Summary formatted (with extended sections)")
-    
-    # ========== FORMAT MONTHLY PERFORMANCE ==========
-    ws_monthly = wb['Monthly Performance']
-    
-    ws_monthly['A1'].font = Font(bold=True, size=14, color="FFFFFF")
-    ws_monthly['A1'].fill = header_fill
-    ws_monthly['A1'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-    safe_merge_cells(ws_monthly, 'A1:M1')
-    ws_monthly.row_dimensions[1].height = 25
-    ws_monthly.row_dimensions[2].height = 8
-    
-    # Headers
-    for col in range(1, 14):
-        cell = ws_monthly.cell(row=3, column=col)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        cell.border = thin_border
-    ws_monthly.row_dimensions[3].height = 22
-    
-    # Portfolio Values
-    for row in [4, 5]:
-        for col in range(1, 14):
-            cell = ws_monthly.cell(row=row, column=col)
-            if col == 1:
-                cell.font = bold_font
-                cell.fill = metric_fill
-            else:
-                cell.fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-        ws_monthly.row_dimensions[row].height = 18
-    
-    ws_monthly.row_dimensions[6].height = 8
-    
-    # Profit Metrics Section
-    ws_monthly['A7'].font = subheader_font
-    ws_monthly['A7'].fill = subheader_fill
-    safe_merge_cells(ws_monthly, 'A7:M7')
-    ws_monthly['A7'].alignment = Alignment(horizontal='left', vertical='center')
-    ws_monthly.row_dimensions[7].height = 20
-    
-    for row in range(8, 13):
-        for col in range(1, 14):
-            cell = ws_monthly.cell(row=row, column=col)
-            if col == 1:
-                cell.font = bold_font
-                cell.fill = metric_fill
-            else:
-                cell.fill = section_fills['trading']
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-        ws_monthly.row_dimensions[row].height = 18
-    
-    ws_monthly.row_dimensions[13].height = 8
-    
-    # Trading Activity Section
-    ws_monthly['A14'].font = subheader_font
-    ws_monthly['A14'].fill = subheader_fill
-    safe_merge_cells(ws_monthly, 'A14:M14')
-    ws_monthly['A14'].alignment = Alignment(horizontal='left', vertical='center')
-    ws_monthly.row_dimensions[14].height = 20
-    
-    for row in range(15, 21):
-        for col in range(1, 14):
-            cell = ws_monthly.cell(row=row, column=col)
-            if col == 1:
-                cell.font = bold_font
-                cell.fill = metric_fill
-            else:
-                cell.fill = section_fills['trading_activity']
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-        ws_monthly.row_dimensions[row].height = 18
-    
-    ws_monthly.row_dimensions[21].height = 8
-    
-    # Cash Position Section
-    ws_monthly['A22'].font = subheader_font
-    ws_monthly['A22'].fill = subheader_fill
-    safe_merge_cells(ws_monthly, 'A22:M22')
-    ws_monthly['A22'].alignment = Alignment(horizontal='left', vertical='center')
-    ws_monthly.row_dimensions[22].height = 20
-    
-    for row in range(23, 27):
-        for col in range(1, 14):
-            cell = ws_monthly.cell(row=row, column=col)
-            if col == 1:
-                cell.font = bold_font
-                cell.fill = metric_fill
-            else:
-                cell.fill = section_fills['cash']
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-        ws_monthly.row_dimensions[row].height = 18
-    
-    ws_monthly.row_dimensions[27].height = 8
-    
-    # Market Comparison Section
-    ws_monthly['A28'].font = subheader_font
-    ws_monthly['A28'].fill = subheader_fill
-    safe_merge_cells(ws_monthly, 'A28:M28')
-    ws_monthly['A28'].alignment = Alignment(horizontal='left', vertical='center')
-    ws_monthly.row_dimensions[28].height = 20
-    
-    for row in range(29, 33):
-        for col in range(1, 14):
-            cell = ws_monthly.cell(row=row, column=col)
-            if col == 1:
-                cell.font = bold_font
-                cell.fill = metric_fill
-            else:
-                cell.fill = section_fills['market']
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-        ws_monthly.row_dimensions[row].height = 18
-    
-    # Format remaining rows
-    for row in range(33, ws_monthly.max_row + 1):
-        for col in range(1, 14):
-            cell = ws_monthly.cell(row=row, column=col)
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-            if col == 1:
-                cell.font = bold_font
-                cell.fill = metric_fill
-            else:
-                cell.fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-    
-    # Set column widths
-    ws_monthly.column_dimensions['A'].width = 28
-    for col in range(2, 14):
-        ws_monthly.column_dimensions[get_column_letter(col)].width = 14
-    
-    # Add performance summary metrics
-    add_performance_summary_metrics(ws_monthly)
-    
-    # Add win/loss sparklines for visual trend indication
-    add_win_loss_sparklines(ws_monthly)
-    
-    print("  [OK] Monthly Performance formatted")
-    
-    # ========== ADD CHARTS ==========
-    add_charts_to_executive_summary(wb)
-    print("  [OK] Charts added")
-
-
-
-
-def add_charts_to_executive_summary(wb):
-    """Add Portfolio Growth and Monthly Returns charts to Executive Summary"""
-    try:
-        ws_exec = wb['Executive Summary']
-        ws_monthly = wb['Monthly Performance']
-        
-        # Extract months
-        months = []
-        for col in range(2, 14):
-            col_letter = get_column_letter(col)
-            month = ws_monthly[f'{col_letter}3'].value
-            if month:
-                months.append(str(month).strip())
-        
-        # Extract portfolio values (row 5)
-        portfolio_values = []
-        for col in range(2, 14):
-            col_letter = get_column_letter(col)
-            val = ws_monthly[f'{col_letter}5'].value
-            if val:
-                try:
-                    if isinstance(val, str):
-                        val = float(val.replace('$', '').replace(',', ''))
-                    else:
-                        val = float(val)
-                    portfolio_values.append(val)
-                except:
-                    portfolio_values.append(0)
-        
-        # Extract monthly profits (row 8)
-        monthly_profits = []
-        for col in range(2, 14):
-            col_letter = get_column_letter(col)
-            val = ws_monthly[f'{col_letter}8'].value
-            if val:
-                try:
-                    if isinstance(val, str):
-                        val = float(val.replace('$', '').replace(',', ''))
-                    else:
-                        val = float(val)
-                    monthly_profits.append(val)
-                except:
-                    monthly_profits.append(0)
-        
-        if months and portfolio_values and monthly_profits:
-            # Add data to Executive Summary for chart references
-            ws_exec['G3'].value = "Month"
-            ws_exec['H3'].value = "Portfolio Value"
-            
-            for i, (month, value) in enumerate(zip(months, portfolio_values)):
-                ws_exec[f'G{4+i}'].value = month
-                ws_exec[f'H{4+i}'].value = value
-            
-            ws_exec['J3'].value = "Month"
-            ws_exec['K3'].value = "Monthly Profit"
-            
-            ws_exec['J3'].value = "Month"
-            ws_exec['K3'].value = "Monthly Profit"
-            
-            # Prepare data with positive/negative separation for color-coding
-            for i, (month, profit) in enumerate(zip(months, monthly_profits)):
-                ws_exec[f'J{4+i}'].value = month
-                ws_exec[f'K{4+i}'].value = profit
-                # Split into positive (column L) and negative (column M) for color-coding
-                ws_exec[f'L{4+i}'].value = profit if profit >= 0 else 0
-                ws_exec[f'M{4+i}'].value = profit if profit < 0 else 0
-            
-            # Set headers for color-coded series
-            ws_exec['L3'].value = "Gains"
-            ws_exec['M3'].value = "Losses"
-            
-            # Portfolio Growth Line Chart
-            portfolio_chart = LineChart()
-            portfolio_chart.title = "Portfolio Growth - 12 Month Progression"
-            portfolio_chart.style = 10
-            portfolio_chart.y_axis.title = "Portfolio Value ($)"
-            portfolio_chart.x_axis.title = "Month"
-            portfolio_chart.height = 10
-            portfolio_chart.width = 16
-            portfolio_chart.legend = None  # Remove legend - hover shows data
-            
-            data = Reference(ws_exec, min_col=8, min_row=3, max_row=3+len(portfolio_values))
-            categories = Reference(ws_exec, min_col=7, min_row=4, max_row=3+len(portfolio_values))
-            portfolio_chart.add_data(data, titles_from_data=True)
-            portfolio_chart.set_categories(categories)
-            
-            # Enhanced line styling with professional dark blue
-            portfolio_chart.series[0].graphicalProperties.line.solidFill = "1F4788"
-            portfolio_chart.series[0].graphicalProperties.line.width = 30000  # Thicker line for visibility
-            
-            ws_exec.add_chart(portfolio_chart, "F1")
-            
-            # Monthly Returns Bar Chart with Professional Styling
-            returns_chart = BarChart()
-            returns_chart.type = "col"
-            returns_chart.title = "Monthly Returns - 12 Month Performance"
-            returns_chart.style = 10
-            returns_chart.y_axis.title = "Profit ($)"
-            returns_chart.x_axis.title = "Month"
-            returns_chart.height = 10
-            returns_chart.width = 16
-            returns_chart.legend = None  # Remove legend - hover shows data
-            
-            # Use original profit data for single series visualization
-            categories = Reference(ws_exec, min_col=10, min_row=4, max_row=3+len(monthly_profits))
-            profit_data = Reference(ws_exec, min_col=11, min_row=3, max_row=3+len(monthly_profits))
-            returns_chart.add_data(profit_data, titles_from_data=True)
-            returns_chart.set_categories(categories)
-            
-            # Professional medium blue color for bars
-            returns_chart.series[0].graphicalProperties.solidFill = "4472C4"
-            
-            # Add data labels through XML manipulation after adding chart
-            ws_exec.add_chart(returns_chart, "F20")
-    
-    except Exception as e:
-        # Charts are optional - don't fail if they can't be added
-        pass
-
-
-def format_type_b(wb, header_fill, subheader_fill, metric_fill, data_fill,
-                 section_fills, header_font, title_font, subheader_font, bold_font,
-                 regular_font, thin_border):
-    """Format Type B files (Data sheet only)"""
-    
-    ws = wb['Data']
-    
-    # Apply header formatting to first row (months)
-    for col in range(1, ws.max_column + 1):
-        cell = ws.cell(row=1, column=col)
-        cell.fill = header_fill
-        cell.font = title_font
-        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        cell.border = thin_border
-    
-    ws.row_dimensions[1].height = 25
-    
-    # Apply formatting to data rows
-    for row in range(2, ws.max_row + 1):
-        # First column (metric names) gets darker formatting
-        cell_a = ws.cell(row=row, column=1)
-        cell_a.fill = subheader_fill
-        cell_a.font = Font(bold=True, size=10, color="FFFFFF")
-        cell_a.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        cell_a.border = thin_border
-        
-        # Data columns get light formatting with borders
-        for col in range(2, ws.max_column + 1):
-            cell = ws.cell(row=row, column=col)
-            cell.fill = data_fill
-            cell.font = regular_font
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-            cell.border = thin_border
-            
-            # Format numbers with currency if they contain currency symbols
-            if cell.value and isinstance(cell.value, str) and '$' in str(cell.value):
-                cell.number_format = '$#,##0.00'
-    
-    # Optimize column widths
-    for col in range(1, ws.max_column + 1):
-        max_length = 0
-        column_letter = get_column_letter(col)
-        
-        for row in range(1, ws.max_row + 1):
-            cell = ws.cell(row=row, column=col)
-            if cell.value:
-                max_length = max(max_length, len(str(cell.value)))
-        
-        adjusted_width = min(max_length + 2, 30)
-        ws.column_dimensions[column_letter].width = adjusted_width
-    
-    print("  [OK] Data sheet formatting applied")
-
-
-if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("\n" + "="*70)
-        print("UNIVERSAL PORTFOLIO FORMATTER (EXTENDED WITH CHARTS)")
-        print("Professional formatting for all portfolio file types")
-        print("="*70)
-        print("\nUsage: python format_all.py <filename.xlsx> [file2.xlsx ...]")
-        print("\nFeatures:")
-        print("  [OK] Professional color-coded formatting")
-        print("  [OK] Portfolio Growth Line Charts")
-        print("  [OK] Monthly Returns Bar Charts")
-        print("  [OK] Executive Summary with KPIs")
-        print("  [OK] Trading Activity Summary")
-        print("  [OK] Key Insights & Recommendations")
-        print("  [OK] Action Items & Strategy")
-        print("\nSupports:")
-        print("  * Type A: Executive Summary + Monthly Performance + Data")
-        print("  * Type A Extended: + Trading Activity + Key Insights + Action Items")
-        print("  * Type B: Single Data sheet")
-        print("\nExample:")
-        print("  python format_all.py Portfolio1.xlsx")
-        print("  python format_all.py *.xlsx")
-        print("="*70 + "\n")
-        sys.exit(0)
-    
-    # Get all files to process
-    files_to_process = []
-    for arg in sys.argv[1:]:
-        if '*' in arg:
-            import glob
-            files_to_process.extend(glob.glob(arg))
-        else:
-            files_to_process.append(arg)
-    
-    print("\n" + "="*70)
-    print(f"Processing {len(files_to_process)} file(s)...")
-    print("="*70)
-    
-    for filename in files_to_process:
-        try:
-            format_portfolio_universal(filename)
-        except Exception as e:
-            print(f"[ERROR] {e}\n")
-    
-    print("="*70)
-    print("FORMATTING COMPLETE")
-    print("="*70 + "\n")
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        filepath = sys.argv[1]
+        success = format_portfolio_file(filepath)
+        sys.exit(0 if success else 1)
+    else:
+        print("Usage: python format_all.py <filepath>")
+        sys.exit(1)
