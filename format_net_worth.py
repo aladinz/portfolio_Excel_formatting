@@ -12,7 +12,7 @@ Formats the consolidated "My Net Worth" portfolio file with:
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from openpyxl.chart import LineChart, BarChart, Reference
+from openpyxl.chart import LineChart, BarChart, DoughnutChart, Reference
 from datetime import datetime
 
 def format_net_worth_file(filepath):
@@ -169,20 +169,35 @@ def create_executive_summary(wb, header_fill, subheader_fill, metric_fill,
                            header_font, title_font, bold_font, regular_font, thin_border):
     """Create Executive Summary sheet for Net Worth consolidation."""
     
-    # Recreate subheader font for this function
+    # Enhanced color scheme
     subheader_font_local = Font(bold=True, size=12, color="FFFFFF")
+    accent_color_green = "70AD47"  # Green for gains
+    accent_color_red = "C5504F"    # Red for losses
+    metric_value_font = Font(bold=True, size=13, color="FFFFFF")
+    section_header_fill = PatternFill(start_color="2E5C8A", end_color="2E5C8A", fill_type="solid")
+    metric_label_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    metric_value_fill_positive = PatternFill(start_color=accent_color_green, end_color=accent_color_green, fill_type="solid")
+    metric_value_fill_neutral = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
     
     # Create new sheet
     ws = wb.create_sheet('Executive Summary', 0)
     
+    # Title section with enhanced styling
     ws['A1'].value = "NET WORTH CONSOLIDATION - EXECUTIVE SUMMARY"
-    ws['A1'].font = title_font
+    ws['A1'].font = Font(bold=True, size=16, color="FFFFFF")
     ws['A1'].fill = header_fill
-    ws.merge_cells('A1:E1')
-    ws['A1'].alignment = Alignment(horizontal='left', vertical='center')
-    ws.row_dimensions[1].height = 25
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+    ws.merge_cells('A1:F1')
+    ws.row_dimensions[1].height = 30
     
-    ws.row_dimensions[2].height = 8
+    # Subtitle with date
+    ws['A2'].value = f"Performance Report | As of {datetime.now().strftime('%B %d, %Y')}"
+    ws['A2'].font = Font(italic=True, size=10, color="666666")
+    ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
+    ws.merge_cells('A2:F2')
+    ws.row_dimensions[2].height = 18
+    
+    ws.row_dimensions[3].height = 6
     
     # Get data from Data sheet for metrics
     data_ws = wb['Data']
@@ -191,68 +206,87 @@ def create_executive_summary(wb, header_fill, subheader_fill, metric_fill,
     metrics = extract_net_worth_metrics(data_ws)
     
     # Portfolio Performance Section
-    row = 3
-    ws[f'A{row}'].value = "PORTFOLIO PERFORMANCE"
+    row = 4
+    ws[f'A{row}'].value = "💼 PORTFOLIO PERFORMANCE"
     ws[f'A{row}'].font = subheader_font_local
-    ws[f'A{row}'].fill = subheader_fill
-    ws.merge_cells(f'A{row}:E{row}')
-    ws.row_dimensions[row].height = 20
+    ws[f'A{row}'].fill = section_header_fill
+    ws.merge_cells(f'A{row}:F{row}')
+    ws[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[row].height = 22
     row += 1
     
-    # Key metrics display
+    # Key metrics display with enhanced formatting
     perf_metrics = [
-        ("Total Net Worth (Latest)", f"${metrics.get('latest_value', 0):,.2f}"),
-        ("Total Profit/Loss (YTD)", f"${metrics.get('total_profit', 0):,.2f}"),
-        ("Profit %", f"{metrics.get('profit_pct', 0):.2f}%"),
-        ("Largest Monthly Gain", f"${metrics.get('largest_gain', 0):,.2f}"),
-        ("Largest Monthly Loss", f"${metrics.get('largest_loss', 0):,.2f}"),
+        ("Total Net Worth (Latest)", f"${metrics.get('latest_value', 0):,.2f}", metric_value_fill_neutral),
+        ("Total Profit/Loss (YTD)", f"${metrics.get('total_profit', 0):,.2f}", 
+         metric_value_fill_positive if metrics.get('total_profit', 0) >= 0 else PatternFill(start_color=accent_color_red, end_color=accent_color_red, fill_type="solid")),
+        ("Profit %", f"{metrics.get('profit_pct', 0):.2f}%", metric_value_fill_neutral),
+        ("Largest Monthly Gain", f"${metrics.get('largest_gain', 0):,.2f}", metric_value_fill_positive),
+        ("Largest Monthly Loss", f"${metrics.get('largest_loss', 0):,.2f}", 
+         PatternFill(start_color=accent_color_red, end_color=accent_color_red, fill_type="solid")),
     ]
     
-    for metric_name, metric_value in perf_metrics:
+    for metric_name, metric_value, value_fill in perf_metrics:
+        # Label cell
         ws[f'A{row}'].value = metric_name
-        ws[f'A{row}'].font = bold_font
-        ws[f'A{row}'].fill = metric_fill
+        ws[f'A{row}'].font = Font(bold=True, size=11, color="FFFFFF")
+        ws[f'A{row}'].fill = metric_label_fill
+        ws[f'A{row}'].border = thin_border
+        ws[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center')
         
+        # Value cell with color coding
         ws[f'B{row}'].value = metric_value
-        ws[f'B{row}'].font = Font(bold=True, size=11, color="1F4788")
-        ws.merge_cells(f'B{row}:E{row}')
+        ws[f'B{row}'].font = metric_value_font
+        ws[f'B{row}'].fill = value_fill
+        ws[f'B{row}'].border = thin_border
+        ws[f'B{row}'].alignment = Alignment(horizontal='right', vertical='center')
+        ws.merge_cells(f'B{row}:F{row}')
         
-        ws.row_dimensions[row].height = 18
+        ws.row_dimensions[row].height = 24
         row += 1
     
     row += 1
     
     # S&P 500 Comparison Section
-    ws[f'A{row}'].value = "VS. S&P 500 BENCHMARK"
+    ws[f'A{row}'].value = "📊 VS. S&P 500 BENCHMARK"
     ws[f'A{row}'].font = subheader_font_local
-    ws[f'A{row}'].fill = subheader_fill
-    ws.merge_cells(f'A{row}:E{row}')
-    ws.row_dimensions[row].height = 20
+    ws[f'A{row}'].fill = section_header_fill
+    ws.merge_cells(f'A{row}:F{row}')
+    ws[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[row].height = 22
     row += 1
     
     comparison_metrics = [
-        ("Your Portfolio Gain", f"${metrics.get('portfolio_gain', 0):,.2f}"),
-        ("S&P 500 Gain (Est.)", f"${metrics.get('sp500_gain', 0):,.2f}"),
-        ("Outperformance", f"${metrics.get('outperformance', 0):,.2f}"),
-        ("Your Portfolio %", f"{metrics.get('portfolio_pct', 0):.2f}%"),
-        ("S&P 500 %", f"{metrics.get('sp500_pct', 0):.2f}%"),
+        ("Your Portfolio Gain", f"${metrics.get('portfolio_gain', 0):,.2f}", metric_value_fill_positive),
+        ("S&P 500 Gain (Est.)", f"${metrics.get('sp500_gain', 0):,.2f}", metric_value_fill_neutral),
+        ("Outperformance", f"${metrics.get('outperformance', 0):,.2f}", 
+         metric_value_fill_positive if metrics.get('outperformance', 0) >= 0 else PatternFill(start_color=accent_color_red, end_color=accent_color_red, fill_type="solid")),
+        ("Your Portfolio %", f"{metrics.get('portfolio_pct', 0):.2f}%", metric_value_fill_positive),
+        ("S&P 500 %", f"{metrics.get('sp500_pct', 0):.2f}%", metric_value_fill_neutral),
     ]
     
-    for metric_name, metric_value in comparison_metrics:
+    for metric_name, metric_value, value_fill in comparison_metrics:
+        # Label cell
         ws[f'A{row}'].value = metric_name
-        ws[f'A{row}'].font = bold_font
-        ws[f'A{row}'].fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+        ws[f'A{row}'].font = Font(bold=True, size=11, color="FFFFFF")
+        ws[f'A{row}'].fill = metric_label_fill
+        ws[f'A{row}'].border = thin_border
+        ws[f'A{row}'].alignment = Alignment(horizontal='left', vertical='center')
         
+        # Value cell with color coding
         ws[f'B{row}'].value = metric_value
-        ws[f'B{row}'].font = Font(bold=True, size=11, color="1F4788")
-        ws.merge_cells(f'B{row}:E{row}')
+        ws[f'B{row}'].font = metric_value_font
+        ws[f'B{row}'].fill = value_fill
+        ws[f'B{row}'].border = thin_border
+        ws[f'B{row}'].alignment = Alignment(horizontal='right', vertical='center')
+        ws.merge_cells(f'B{row}:F{row}')
         
-        ws.row_dimensions[row].height = 18
+        ws.row_dimensions[row].height = 24
         row += 1
     
-    # Column widths
-    ws.column_dimensions['A'].width = 30
-    for col in ['B', 'C', 'D', 'E']:
+    # Column widths for enhanced layout
+    ws.column_dimensions['A'].width = 28
+    for col in ['B', 'C', 'D', 'E', 'F']:
         ws.column_dimensions[col].width = 18
 
 
@@ -320,7 +354,7 @@ def extract_net_worth_metrics(ws):
 
 
 def add_comparison_charts(wb):
-    """Add Net Worth vs S&P 500 comparison charts."""
+    """Add Net Worth vs S&P 500 comparison charts with professional styling."""
     try:
         if 'Executive Summary' not in wb.sheetnames:
             return
@@ -358,43 +392,93 @@ def add_comparison_charts(wb):
                     sp500_values.append(0)
         
         if months and portfolio_values and sp500_values:
-            # Add data to reference area
-            ws_exec['G3'].value = "Month"
-            ws_exec['H3'].value = "Portfolio Value"
-            ws_exec['I3'].value = "S&P Value"
+            # Add data to reference area (hidden columns)
+            ws_exec['H2'].value = "Month"
+            ws_exec['I2'].value = "Your Portfolio"
+            ws_exec['J2'].value = "S&P 500"
             
             for i, (month, pval, sp_val) in enumerate(zip(months, portfolio_values, sp500_values)):
-                ws_exec[f'G{4+i}'].value = month
-                ws_exec[f'H{4+i}'].value = pval
-                ws_exec[f'I{4+i}'].value = sp_val
+                ws_exec[f'H{3+i}'].value = month
+                ws_exec[f'I{3+i}'].value = pval
+                ws_exec[f'J{3+i}'].value = sp_val
             
-            # Create comparison chart
-            comp_chart = LineChart()
-            comp_chart.title = "Net Worth vs S&P 500 Performance"
-            comp_chart.y_axis.title = "Value ($)"
-            comp_chart.x_axis.title = "Month"
-            comp_chart.height = 10
-            comp_chart.width = 16
-            comp_chart.legend = None
+            # ===== CHART 1: BAR CHART - Performance Comparison =====
+            bar_chart = BarChart()
+            bar_chart.type = "col"  # Column (vertical bars)
+            bar_chart.title = "Portfolio Value vs S&P 500 (Monthly Track)"
+            bar_chart.y_axis.title = "Value ($)"
+            bar_chart.x_axis.title = "Month"
+            bar_chart.height = 11
+            bar_chart.width = 18
+            bar_chart.legend.position = 'b'  # Bottom legend
+            bar_chart.legend.horizontalAnchor = "center"
             
-            # Portfolio line
-            data_portfolio = Reference(ws_exec, min_col=8, min_row=3, max_row=3+len(portfolio_values))
-            # S&P 500 line
-            data_sp500 = Reference(ws_exec, min_col=9, min_row=3, max_row=3+len(sp500_values))
-            categories = Reference(ws_exec, min_col=7, min_row=4, max_row=3+len(months))
+            # Add data series
+            data_portfolio = Reference(ws_exec, min_col=9, min_row=2, max_row=2+len(portfolio_values))
+            data_sp500 = Reference(ws_exec, min_col=10, min_row=2, max_row=2+len(sp500_values))
+            categories = Reference(ws_exec, min_col=8, min_row=3, max_row=2+len(months))
             
-            comp_chart.add_data(data_portfolio, titles_from_data=True)
-            comp_chart.add_data(data_sp500, titles_from_data=True)
-            comp_chart.set_categories(categories)
+            bar_chart.add_data(data_portfolio, titles_from_data=True)
+            bar_chart.add_data(data_sp500, titles_from_data=True)
+            bar_chart.set_categories(categories)
             
-            # Style lines
-            comp_chart.series[0].graphicalProperties.line.solidFill = "1F4788"  # Dark blue - Your portfolio
-            comp_chart.series[0].graphicalProperties.line.width = 25000
+            # Color the series
+            bar_chart.series[0].graphicalProperties.solidFill = "1F4788"  # Dark blue - Your portfolio
+            bar_chart.series[1].graphicalProperties.solidFill = "70AD47"  # Green - S&P 500
             
-            comp_chart.series[1].graphicalProperties.line.solidFill = "595959"  # Gray - S&P 500
-            comp_chart.series[1].graphicalProperties.line.width = 20000
+            # Add data labels
+            from openpyxl.chart.label import DataLabelList
+            bar_chart.dataLabels = DataLabelList()
+            bar_chart.dataLabels.showVal = False
             
-            ws_exec.add_chart(comp_chart, "F10")
+            ws_exec.add_chart(bar_chart, "A20")
+            
+            # ===== CHART 2: DONUT CHART - Performance Breakdown =====
+            # Calculate final values for donut
+            final_portfolio = portfolio_values[-1] if portfolio_values else 0
+            final_sp500 = sp500_values[-1] if sp500_values else 0
+            outperformance = final_portfolio - final_sp500
+            
+            ws_exec['H15'].value = "Category"
+            ws_exec['I15'].value = "Value"
+            
+            if outperformance >= 0:
+                ws_exec['H16'].value = "Outperformance"
+                ws_exec['I16'].value = outperformance
+                ws_exec['H17'].value = "S&P 500 Level"
+                ws_exec['I17'].value = final_sp500
+            else:
+                ws_exec['H16'].value = "S&P 500 Level"
+                ws_exec['I16'].value = final_sp500
+                ws_exec['H17'].value = "Under S&P 500"
+                ws_exec['I17'].value = abs(outperformance)
+            
+            from openpyxl.chart import DoughnutChart
+            donut_chart = DoughnutChart()
+            donut_chart.title = "Final Position Analysis"
+            donut_chart.height = 11
+            donut_chart.width = 14
+            donut_chart.legend.position = 'r'  # Right legend
+            donut_chart.legend.horizontalAnchor = "left"
+            
+            # Add data
+            data_donut = Reference(ws_exec, min_col=9, min_row=15, max_row=17)
+            labels_donut = Reference(ws_exec, min_col=8, min_row=16, max_row=17)
+            
+            donut_chart.add_data(data_donut, titles_from_data=True)
+            donut_chart.set_categories(labels_donut)
+            
+            # Color the donut
+            donut_chart.series[0].graphicalProperties.solidFill = "1F4788"  # Dark blue
+            from openpyxl.chart.series import DataPoint
+            pt2 = DataPoint(idx=1)
+            pt2.graphicalProperties.solidFill = "70AD47"  # Green
+            donut_chart.series[0].data_points = [pt2]
+            
+            # Donut hole size
+            donut_chart.holeSize = 60
+            
+            ws_exec.add_chart(donut_chart, "J20")
             
     except Exception as e:
         pass
