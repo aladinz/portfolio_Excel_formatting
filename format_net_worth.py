@@ -311,15 +311,22 @@ def extract_net_worth_metrics(ws):
         if latest:
             metrics['latest_value'] = float(latest) if isinstance(latest, (int, float)) else 0
         
-        # Get total profit (last month, column M, row 10)
-        profit = ws['M10'].value
-        if profit:
-            metrics['total_profit'] = float(profit) if isinstance(profit, (int, float)) else 0
+        # Get INITIAL portfolio value (first month, column B, row 5)
+        initial = ws['B5'].value
+        initial_value = float(initial) if isinstance(initial, (int, float)) else 0
         
-        # Get profit percentage (last month, column M, row 11)
-        profit_pct = ws['M11'].value
-        if profit_pct:
-            metrics['profit_pct'] = float(profit_pct) if isinstance(profit_pct, (int, float)) else 0
+        # Calculate Total YTD Profit as SUM of all monthly profits (row 10)
+        total_profit = 0
+        for col in range(2, 14):  # B through M (12 months)
+            val = ws.cell(10, col).value
+            if val and isinstance(val, (int, float)):
+                total_profit += float(val)
+        
+        metrics['total_profit'] = total_profit
+        
+        # Calculate profit percentage
+        if initial_value != 0:
+            metrics['profit_pct'] = (total_profit / initial_value) * 100
         
         # Find largest gain and loss from profit row (row 10)
         profits = []
@@ -332,20 +339,28 @@ def extract_net_worth_metrics(ws):
             metrics['largest_gain'] = max([p for p in profits if p >= 0], default=0)
             metrics['largest_loss'] = min([p for p in profits if p < 0], default=0)
         
-        # Get S&P 500 data (row 34, last month M34)
-        sp500_val = ws['M34'].value
-        if sp500_val:
-            metrics['sp500_gain'] = float(sp500_val) if isinstance(sp500_val, (int, float)) else 0
+        # Calculate Portfolio Gain (difference between latest and initial values)
+        metrics['portfolio_gain'] = metrics['latest_value'] - initial_value
+        
+        # Get S&P 500 values (row 34)
+        sp500_initial = ws['B34'].value
+        sp500_initial = float(sp500_initial) if isinstance(sp500_initial, (int, float)) else 0
+        
+        sp500_latest = ws['M34'].value
+        sp500_latest_val = float(sp500_latest) if isinstance(sp500_latest, (int, float)) else 0
+        
+        # Calculate S&P 500 Gain
+        metrics['sp500_gain'] = sp500_latest_val - sp500_initial
         
         # Calculate outperformance
-        metrics['outperformance'] = metrics['total_profit'] - metrics['sp500_gain']
+        metrics['outperformance'] = metrics['portfolio_gain'] - metrics['sp500_gain']
         
-        # Get percentages
-        metrics['portfolio_pct'] = metrics['profit_pct']  # Already in percentage
+        # Calculate percentages
+        if initial_value != 0:
+            metrics['portfolio_pct'] = (metrics['portfolio_gain'] / initial_value) * 100
         
-        sp500_pct = ws['M35'].value
-        if sp500_pct:
-            metrics['sp500_pct'] = float(sp500_pct) if isinstance(sp500_pct, (int, float)) else 0
+        if sp500_initial != 0:
+            metrics['sp500_pct'] = (metrics['sp500_gain'] / sp500_initial) * 100
         
     except Exception as e:
         pass
