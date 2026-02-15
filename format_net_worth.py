@@ -369,7 +369,7 @@ def extract_net_worth_metrics(ws):
 
 
 def add_comparison_charts(wb):
-    """Add Net Worth vs S&P 500 comparison bar chart with professional styling."""
+    """Add clean, simple bar chart for Net Worth vs S&P 500 comparison."""
     try:
         if 'Executive Summary' not in wb.sheetnames:
             return
@@ -417,15 +417,12 @@ def add_comparison_charts(wb):
                 ws_exec[f'I{3+i}'].value = pval
                 ws_exec[f'J{3+i}'].value = sp_val
             
-            # Create single professional bar chart
+            # Create clean, simple bar chart
             bar_chart = BarChart()
             bar_chart.type = "col"  # Column (vertical bars)
             bar_chart.title = "Portfolio Value vs S&P 500 (Monthly Track)"
-            bar_chart.y_axis.title = "Value ($)"
-            bar_chart.height = 12
-            bar_chart.width = 20
-            bar_chart.legend.position = 'b'  # Bottom legend
-            bar_chart.legend.horizontalAnchor = "center"
+            bar_chart.height = 10
+            bar_chart.width = 18
             
             # Add data series
             data_portfolio = Reference(ws_exec, min_col=9, min_row=2, max_row=2+len(portfolio_values))
@@ -436,14 +433,24 @@ def add_comparison_charts(wb):
             bar_chart.add_data(data_sp500, titles_from_data=True)
             bar_chart.set_categories(categories)
             
-            # Color the series
+            # Simple color scheme
             bar_chart.series[0].graphicalProperties.solidFill = "1F4788"  # Dark blue - Your portfolio
             bar_chart.series[1].graphicalProperties.solidFill = "70AD47"  # Green - S&P 500
             
-            # Remove data labels for clean look
-            from openpyxl.chart.label import DataLabelList
-            bar_chart.dataLabels = DataLabelList()
-            bar_chart.dataLabels.showVal = False
+            # Clean legend at bottom
+            bar_chart.legend.position = 'b'
+            bar_chart.legend.horizontalAnchor = "center"
+            
+            # No data labels - keep it clean
+            bar_chart.dataLabels = None
+            
+            # Set axis titles
+            bar_chart.y_axis.title = "Value ($)"
+            bar_chart.y_axis.delete = False
+            bar_chart.x_axis.delete = False
+            
+            # Remove gridlines for cleaner look
+            bar_chart.y_axis.majorGridlines = None
             
             ws_exec.add_chart(bar_chart, "A18")
             
