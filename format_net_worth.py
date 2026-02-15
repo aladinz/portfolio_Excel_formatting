@@ -12,7 +12,7 @@ Formats the consolidated "My Net Worth" portfolio file with:
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from openpyxl.chart import LineChart, BarChart, DoughnutChart, Reference
+from openpyxl.chart import LineChart, BarChart, Reference
 from datetime import datetime
 
 def format_net_worth_file(filepath):
@@ -142,7 +142,7 @@ def format_data_sheet(wb, header_fill, subheader_fill, metric_fill, data_fill,
             cell = ws.cell(row=row, column=col)
             
             if col == 1:  # Label column
-                cell.font = bold_font
+                cell.font = Font(bold=True, size=11, color="000000")  # Dark/black text
                 cell.fill = metric_fill
             else:
                 cell.fill = section_fill
@@ -369,7 +369,7 @@ def extract_net_worth_metrics(ws):
 
 
 def add_comparison_charts(wb):
-    """Add Net Worth vs S&P 500 comparison charts with professional styling."""
+    """Add Net Worth vs S&P 500 comparison bar chart with professional styling."""
     try:
         if 'Executive Summary' not in wb.sheetnames:
             return
@@ -417,14 +417,13 @@ def add_comparison_charts(wb):
                 ws_exec[f'I{3+i}'].value = pval
                 ws_exec[f'J{3+i}'].value = sp_val
             
-            # ===== CHART 1: BAR CHART - Performance Comparison =====
+            # Create single professional bar chart
             bar_chart = BarChart()
             bar_chart.type = "col"  # Column (vertical bars)
             bar_chart.title = "Portfolio Value vs S&P 500 (Monthly Track)"
             bar_chart.y_axis.title = "Value ($)"
-            bar_chart.x_axis.title = "Month"
-            bar_chart.height = 11
-            bar_chart.width = 18
+            bar_chart.height = 12
+            bar_chart.width = 20
             bar_chart.legend.position = 'b'  # Bottom legend
             bar_chart.legend.horizontalAnchor = "center"
             
@@ -441,59 +440,12 @@ def add_comparison_charts(wb):
             bar_chart.series[0].graphicalProperties.solidFill = "1F4788"  # Dark blue - Your portfolio
             bar_chart.series[1].graphicalProperties.solidFill = "70AD47"  # Green - S&P 500
             
-            # Add data labels
+            # Remove data labels for clean look
             from openpyxl.chart.label import DataLabelList
             bar_chart.dataLabels = DataLabelList()
             bar_chart.dataLabels.showVal = False
             
-            ws_exec.add_chart(bar_chart, "A20")
-            
-            # ===== CHART 2: DONUT CHART - Performance Breakdown =====
-            # Calculate final values for donut
-            final_portfolio = portfolio_values[-1] if portfolio_values else 0
-            final_sp500 = sp500_values[-1] if sp500_values else 0
-            outperformance = final_portfolio - final_sp500
-            
-            ws_exec['H15'].value = "Category"
-            ws_exec['I15'].value = "Value"
-            
-            if outperformance >= 0:
-                ws_exec['H16'].value = "Outperformance"
-                ws_exec['I16'].value = outperformance
-                ws_exec['H17'].value = "S&P 500 Level"
-                ws_exec['I17'].value = final_sp500
-            else:
-                ws_exec['H16'].value = "S&P 500 Level"
-                ws_exec['I16'].value = final_sp500
-                ws_exec['H17'].value = "Under S&P 500"
-                ws_exec['I17'].value = abs(outperformance)
-            
-            from openpyxl.chart import DoughnutChart
-            donut_chart = DoughnutChart()
-            donut_chart.title = "Final Position Analysis"
-            donut_chart.height = 11
-            donut_chart.width = 14
-            donut_chart.legend.position = 'r'  # Right legend
-            donut_chart.legend.horizontalAnchor = "left"
-            
-            # Add data
-            data_donut = Reference(ws_exec, min_col=9, min_row=15, max_row=17)
-            labels_donut = Reference(ws_exec, min_col=8, min_row=16, max_row=17)
-            
-            donut_chart.add_data(data_donut, titles_from_data=True)
-            donut_chart.set_categories(labels_donut)
-            
-            # Color the donut
-            donut_chart.series[0].graphicalProperties.solidFill = "1F4788"  # Dark blue
-            from openpyxl.chart.series import DataPoint
-            pt2 = DataPoint(idx=1)
-            pt2.graphicalProperties.solidFill = "70AD47"  # Green
-            donut_chart.series[0].data_points = [pt2]
-            
-            # Donut hole size
-            donut_chart.holeSize = 60
-            
-            ws_exec.add_chart(donut_chart, "J20")
+            ws_exec.add_chart(bar_chart, "A18")
             
     except Exception as e:
         pass
